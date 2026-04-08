@@ -1,0 +1,63 @@
+[data-theme='dark'] {
+  --color-bg-primary: #0d1117;
+  --color-bg-secondary: #161b22;
+  --color-bg-tertiary: #21262d;
+  --color-bg-hover: #292e36;
+  --color-bg-active: #2d333b;
+  --color-bg-input: #0d1117;
+
+  --color-border: #30363d;
+  --color-border-subtle: #21262d;
+
+  --color-text-primary: #e6edf3;
+  --color-text-secondary: #8b949e;
+  --color-text-tertiary: #6e7681;
+  --color-text-placeholder: #484f58;
+  --color-text-inverse: #0d1117;
+
+  --color-accent: #58a6ff;
+  --color-accent-hover: #79c0ff;
+  --color-accent-muted: #1f6feb33;
+  --color-success: #3fb950;
+  --color-success-muted: #23863633;
+  --color-danger: #f85149;
+  --color-danger-muted: #da363333;
+  --color-warning: #d29922;
+  --color-warning-muted: #9e6a0333;
+
+  --color-diff-add-bg: #12261e;
+  --color-diff-add-line: #1a4d2e;
+  --color-diff-del-bg: #2d1315;
+  --color-diff-del-line: #5c2124;
+  --color-diff-hunk-bg: #1c2233;
+
+  /* Branch graph colors */
+  --color-graph-1: #58a6ff;
+  --color-graph-2: #3fb950;
+  --color-graph-3: #bc8cff;
+  --color-graph-4: #f78166;
+  --color-graph-5: #d29922;
+  --color-graph-6: #f778ba;
+  --color-graph-7: #56d4dd;
+  --color-graph-8: #db6d28;
+  --color-graph-9: #7ee787;
+  --color-graph-10: #ff7b72;
+  --color-graph-11: #79c0ff;
+  --color-graph-12: #d2a8ff;
+
+  --color-scrollbar-track: transparent;
+  --color-scrollbar-thumb: #484f58;
+  --color-scrollbar-thumb-hover: #6e7681;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  --titlebar-height: 38px;
+  --sidebar-width: 260px;
+}
