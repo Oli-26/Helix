@@ -113,6 +113,27 @@ export class GitService {
 
   async getBranches(): Promise<{ local: BranchInfo[]; remote: BranchInfo[] }> {
     const summary = await this.git.branch(['-a', '-v']);
+
+    // Get last commit dates for all branches in one call
+    const dateMap = new Map<string, number>();
+    try {
+      const raw = await this.git.raw([
+        'for-each-ref',
+        '--sort=-committerdate',
+        '--format=%(refname:short)|%(committerdate:unix)',
+        'refs/heads/',
+        'refs/remotes/',
+      ]);
+      for (const line of raw.trim().split('\n').filter(Boolean)) {
+        const [ref, dateStr] = line.split('|');
+        if (ref && dateStr) {
+          dateMap.set(ref, parseInt(dateStr, 10));
+        }
+      }
+    } catch {
+      // ok if for-each-ref fails
+    }
+
     const local: BranchInfo[] = [];
     const remote: BranchInfo[] = [];
 
@@ -122,6 +143,7 @@ export class GitService {
         current: info.current,
         commit: info.commit,
         label: info.label,
+        lastCommitDate: dateMap.get(info.name),
       };
 
       if (name.startsWith('remotes/')) {

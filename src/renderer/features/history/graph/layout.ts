@@ -1,5 +1,7 @@
 import type { CommitNode, GraphLayoutResult, GraphEdge } from '../../../../shared/git-types';
 
+const MAX_LANES = 20; // Cap to prevent blowup on repos with many branches
+
 export function computeGraphLayout(commits: CommitNode[]): GraphLayoutResult {
   const nodes = new Map<string, { lane: number; row: number; color: string }>();
   const edges: GraphEdge[] = [];
@@ -27,8 +29,12 @@ export function computeGraphLayout(commits: CommitNode[]): GraphLayoutResult {
       // New branch head — find first free lane
       lane = lanes.indexOf(null);
       if (lane === -1) {
-        lane = lanes.length;
-        lanes.push(null);
+        if (lanes.length >= MAX_LANES) {
+          lane = MAX_LANES - 1; // Collapse overflow into last lane
+        } else {
+          lane = lanes.length;
+          lanes.push(null);
+        }
       }
     }
 
@@ -58,8 +64,12 @@ export function computeGraphLayout(commits: CommitNode[]): GraphLayoutResult {
         } else {
           parentLane = lanes.indexOf(null);
           if (parentLane === -1) {
-            parentLane = lanes.length;
-            lanes.push(null);
+            if (lanes.length >= MAX_LANES) {
+              parentLane = MAX_LANES - 1;
+            } else {
+              parentLane = lanes.length;
+              lanes.push(null);
+            }
           }
           reserved.set(parentHash, parentLane);
         }

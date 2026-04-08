@@ -1,29 +1,54 @@
+import { useState, useRef, useCallback } from 'react';
 import { Allotment } from 'allotment';
-import { Virtuoso } from 'react-virtuoso';
-import { motion } from 'framer-motion';
+import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { formatDistanceToNow } from 'date-fns';
-import { GitCommit, Tag, GitBranch } from 'lucide-react';
+import { GitCommit, Tag, GitBranch, Loader2, ChevronDown } from 'lucide-react';
 import { useCommitLog } from '../../hooks/useCommitLog';
 import { useUIStore } from '../../stores/ui-store';
 import type { CommitNode } from '../../../shared/git-types';
 import { CommitGraph } from './CommitGraph';
 import { CommitDetail } from './CommitDetail';
+import { SkeletonCommitRow } from '../../components/ui/Skeleton';
+import { EmptyState } from '../../components/shared/EmptyState';
+
+const INITIAL_COUNT = 500;
+const LOAD_MORE_COUNT = 500;
 
 export function HistoryView() {
   const repoPath = useUIStore((s) => s.repoPath);
   const selectedCommit = useUIStore((s) => s.selectedCommit);
   const setSelectedCommit = useUIStore((s) => s.setSelectedCommit);
-  const { data: commits, isLoading } = useCommitLog(repoPath);
+  const [maxCount, setMaxCount] = useState(INITIAL_COUNT);
+  const { data: commits, isLoading } = useCommitLog(repoPath, maxCount);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [visibleHeight, setVisibleHeight] = useState(800);
 
-  if (isLoading) {
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop);
+    setVisibleHeight(e.currentTarget.clientHeight);
+  }, []);
+
+  const loadMore = () => {
+    setMaxCount((c) => c + LOAD_MORE_COUNT);
+  };
+
+  if (isLoading && !commits) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-          className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full"
-        />
+      <div className="h-full overflow-hidden">
+        {Array.from({ length: 15 }).map((_, i) => (
+          <SkeletonCommitRow key={i} />
+        ))}
       </div>
+    );
+  }
+
+  if (!commits || commits.length === 0) {
+    return (
+      <EmptyState
+        illustration="commits"
+        title="No commits yet"
+        description="This repository has no commit history"
+      />
     );
   }
 
@@ -31,13 +56,21 @@ export function HistoryView() {
     <Allotment vertical>
       <Allotment.Pane>
         <div className="h-full flex">
-          {/* Graph column */}
-          <CommitGraph commits={commits || []} />
+          {/* Graph column — only show for manageable sizes */}
+          {commits.length <= 200 && (
+            <div className="overflow-hidden flex-shrink-0" style={{ marginTop: -scrollTop }}>
+              <CommitGraph
+                commits={commits}
+                scrollTop={scrollTop}
+                visibleHeight={visibleHeight}
+              />
+            </div>
+          )}
 
           {/* Commit list */}
           <div className="flex-1 overflow-hidden">
             <Virtuoso
-              data={commits || []}
+              data={commits}
               itemContent={(index, commit) => (
                 <CommitRow
                   commit={commit}
@@ -46,7 +79,20 @@ export function HistoryView() {
                 />
               )}
               style={{ height: '100%' }}
-              overscan={50}
+              overscan={30}
+              onScroll={(e) => handleScroll(e as unknown as React.UIEvent<HTMLDivElement>)}
+              components={{
+                Footer: () =>
+                  commits.length >= maxCount ? (
+                    <button
+                      onClick={loadMore}
+                      className="w-full flex items-center justify-center gap-2 py-3 text-xs text-accent hover:text-accent-hover hover:bg-hover transition-colors"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                      Load more commits
+                    </button>
+                  ) : null,
+              }}
             />
           </div>
         </div>
@@ -88,6 +134,7 @@ function CommitRow({
           </span>
           {commit.refs
             .filter((r) => !r.startsWith('tag:'))
+            .slice(0, 3)
             .map((ref) => (
               <span
                 key={ref}
@@ -99,6 +146,7 @@ function CommitRow({
             ))}
           {commit.refs
             .filter((r) => r.startsWith('tag:'))
+            .slice(0, 2)
             .map((ref) => (
               <span
                 key={ref}

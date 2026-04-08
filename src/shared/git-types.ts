@@ -38,6 +38,7 @@ export interface BranchInfo {
   tracking?: string;
   ahead?: number;
   behind?: number;
+  lastCommitDate?: number; // unix timestamp
 }
 
 export interface RemoteInfo {

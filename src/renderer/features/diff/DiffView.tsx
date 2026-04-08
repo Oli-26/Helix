@@ -147,9 +147,9 @@ function DiffFileSection({
   return (
     <div className="border-b border-default">
       {/* File header */}
-      <button
+      <div
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center gap-2 px-4 py-2 bg-tertiary hover:bg-hover transition-colors text-left"
+        className="w-full flex items-center gap-2 px-4 py-2 bg-tertiary hover:bg-hover transition-colors text-left cursor-pointer"
       >
         <span className={`text-xs font-medium uppercase ${statusColors[file.status]}`}>
           {file.status}
@@ -179,7 +179,7 @@ function DiffFileSection({
             <Copy className="w-3 h-3 text-tertiary" />
           )}
         </button>
-      </button>
+      </div>
 
       {/* Diff content */}
       <AnimatePresence initial={false}>
