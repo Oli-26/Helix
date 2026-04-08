@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Columns2, Rows3, FileText, Copy, Check } from 'lucide-react';
 import { gitApi } from '../../api/git';
-import { useUIStore } from '../../stores/ui-store';
+import { useUIStore , useRepoPath } from '../../stores/ui-store';
 import { UnifiedDiff } from './UnifiedDiff';
 import { SplitDiff } from './SplitDiff';
 import type { DiffFile } from '../../../shared/git-types';
@@ -15,7 +15,7 @@ interface DiffViewProps {
 }
 
 export function DiffView({ filePath, staged, commitHash }: DiffViewProps) {
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
   const diffViewMode = useUIStore((s) => s.diffViewMode);
   const setDiffViewMode = useUIStore((s) => s.setDiffViewMode);
 

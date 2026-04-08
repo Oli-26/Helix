@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   GitBranch,
@@ -21,11 +21,13 @@ import {
   SortAsc,
   Clock,
   SortDesc,
+  Trash2,
+  CheckCircle2,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useBranches } from '../../hooks/useBranches';
 import { useRepository } from '../../hooks/useRepository';
-import { useUIStore, type View } from '../../stores/ui-store';
+import { useUIStore, type View, useRepoPath, useCurrentView } from '../../stores/ui-store';
 import {
   useBranchPrefsStore,
   type BranchSortMode,
@@ -33,11 +35,12 @@ import {
 import { gitApi } from '../../api/git';
 import { useQueryClient } from '@tanstack/react-query';
 import { ContextMenu } from '../ui/ContextMenu';
+import { toast } from '../ui/Toast';
 import type { BranchInfo } from '../../../shared/git-types';
 
 export function Sidebar() {
-  const repoPath = useUIStore((s) => s.repoPath);
-  const currentView = useUIStore((s) => s.currentView);
+  const repoPath = useRepoPath();
+  const currentView = useCurrentView();
   const setView = useUIStore((s) => s.setView);
   const branches = useBranches(repoPath);
   const { data: repo } = useRepository(repoPath);
@@ -50,54 +53,42 @@ export function Sidebar() {
 
   const handleCheckout = async (branch: string) => {
     if (!repoPath) return;
-    await gitApi.checkout(repoPath, branch);
+    try {
+      await gitApi.checkout(repoPath, branch);
+      queryClient.invalidateQueries({ queryKey: ['git'] });
+      toast.success('Checked out', branch);
+    } catch (err: any) {
+      toast.error('Checkout failed', err.message);
+    }
+  };
+
+  const handleDeleteBranches = async (names: string[]) => {
+    if (!repoPath) return;
+    for (const name of names) {
+      try {
+        await gitApi.deleteBranch(repoPath, name);
+      } catch (err: any) {
+        toast.error(`Failed to delete ${name}`, err.message);
+      }
+    }
     queryClient.invalidateQueries({ queryKey: ['git'] });
+    toast.success(
+      `Deleted ${names.length} branch${names.length > 1 ? 'es' : ''}`,
+      names.join(', '),
+    );
   };
 
   return (
     <div className="h-full bg-secondary flex flex-col border-r border-default overflow-hidden">
       {/* Navigation */}
       <div className="px-2 py-3 border-b border-default flex-shrink-0">
-        <NavItem
-          icon={<History className="w-4 h-4" />}
-          label="History"
-          active={currentView === 'history'}
-          onClick={() => setView('history')}
-        />
-        <NavItem
-          icon={<FileEdit className="w-4 h-4" />}
-          label="Changes"
-          active={currentView === 'staging'}
-          onClick={() => setView('staging')}
-        />
-        <NavItem
-          icon={<Upload className="w-4 h-4" />}
-          label="Remotes"
-          active={currentView === 'remotes'}
-          onClick={() => setView('remotes')}
-        />
-        <NavItem
-          icon={<FolderGit2 className="w-4 h-4" />}
-          label="Submodules"
-          active={currentView === 'submodules'}
-          onClick={() => setView('submodules')}
-        />
-        <NavItem
-          icon={<Search className="w-4 h-4" />}
-          label="Search"
-          active={currentView === 'search'}
-          onClick={() => setView('search')}
-          shortcut="Ctrl+K"
-        />
+        <NavItem icon={<History className="w-4 h-4" />} label="History" active={currentView === 'history'} onClick={() => setView('history')} />
+        <NavItem icon={<FileEdit className="w-4 h-4" />} label="Changes" active={currentView === 'staging'} onClick={() => setView('staging')} />
+        <NavItem icon={<Upload className="w-4 h-4" />} label="Remotes" active={currentView === 'remotes'} onClick={() => setView('remotes')} />
+        <NavItem icon={<FolderGit2 className="w-4 h-4" />} label="Submodules" active={currentView === 'submodules'} onClick={() => setView('submodules')} />
+        <NavItem icon={<Search className="w-4 h-4" />} label="Search" active={currentView === 'search'} onClick={() => setView('search')} shortcut="Ctrl+K" />
         {isInConflict && (
-          <NavItem
-            icon={<AlertTriangle className="w-4 h-4" />}
-            label="Conflicts"
-            active={currentView === 'conflicts'}
-            onClick={() => setView('conflicts')}
-            badge="!"
-            badgeColor="warning"
-          />
+          <NavItem icon={<AlertTriangle className="w-4 h-4" />} label="Conflicts" active={currentView === 'conflicts'} onClick={() => setView('conflicts')} badge="!" badgeColor="warning" />
         )}
       </div>
 
@@ -107,38 +98,21 @@ export function Sidebar() {
           localBranches={branches.data?.local || []}
           remoteBranches={branches.data?.remote || []}
           onCheckout={handleCheckout}
+          onDelete={handleDeleteBranches}
         />
 
-        <CollapsibleSection
-          icon={<Globe className="w-4 h-4" />}
-          title="Remotes"
-          count={branches.data?.remote.length}
-        >
+        <CollapsibleSection icon={<Globe className="w-4 h-4" />} title="Remotes" count={branches.data?.remote.length}>
           {branches.data?.remote.map((branch) => (
-            <BranchRow
-              key={branch.name}
-              branch={branch}
-            />
+            <BranchRow key={branch.name} branch={branch} isSelected={false} onSelect={() => {}} />
           ))}
         </CollapsibleSection>
 
-        <CollapsibleSection
-          icon={<Tag className="w-4 h-4" />}
-          title="Tags"
-          count={0}
-        >
+        <CollapsibleSection icon={<Tag className="w-4 h-4" />} title="Tags" count={0}>
           <div className="px-3 py-2 text-xs text-tertiary">No tags</div>
         </CollapsibleSection>
 
-        <CollapsibleSection
-          icon={<Archive className="w-4 h-4" />}
-          title="Stashes"
-          count={0}
-        >
-          <button
-            onClick={() => setView('stashes')}
-            className="w-full px-3 py-2 text-xs text-accent hover:text-accent-hover text-left"
-          >
+        <CollapsibleSection icon={<Archive className="w-4 h-4" />} title="Stashes" count={0}>
+          <button onClick={() => setView('stashes')} className="w-full px-3 py-2 text-xs text-accent hover:text-accent-hover text-left">
             Manage stashes...
           </button>
         </CollapsibleSection>
@@ -147,21 +121,25 @@ export function Sidebar() {
   );
 }
 
-// ─── Branch Section with sort, filter, folders, favourites ──────────
+// ─── Branch Section with sort, filter, folders, favourites, multi-select ─────
 
 function BranchSection({
   localBranches,
   remoteBranches,
   onCheckout,
+  onDelete,
 }: {
   localBranches: BranchInfo[];
   remoteBranches: BranchInfo[];
   onCheckout: (name: string) => void;
+  onDelete: (names: string[]) => void;
 }) {
   const [isOpen, setIsOpen] = useState(true);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const lastClickedRef = useRef<string | null>(null);
 
   const filter = useBranchPrefsStore((s) => s.filter);
   const setFilter = useBranchPrefsStore((s) => s.setFilter);
@@ -170,9 +148,7 @@ function BranchSection({
   const favourites = useBranchPrefsStore((s) => s.favourites);
   const folders = useBranchPrefsStore((s) => s.folders);
   const addFolder = useBranchPrefsStore((s) => s.addFolder);
-  const getFolderForBranch = useBranchPrefsStore((s) => s.getFolderForBranch);
 
-  // Filter
   const filtered = useMemo(() => {
     let list = localBranches;
     if (filter) {
@@ -182,25 +158,64 @@ function BranchSection({
     return list;
   }, [localBranches, filter]);
 
-  // Sort
   const sorted = useMemo(() => {
     const arr = [...filtered];
     switch (sortMode) {
       case 'date-desc':
-        return arr.sort(
-          (a, b) => (b.lastCommitDate || 0) - (a.lastCommitDate || 0),
-        );
+        return arr.sort((a, b) => (b.lastCommitDate || 0) - (a.lastCommitDate || 0));
       case 'date-asc':
-        return arr.sort(
-          (a, b) => (a.lastCommitDate || 0) - (b.lastCommitDate || 0),
-        );
+        return arr.sort((a, b) => (a.lastCommitDate || 0) - (b.lastCommitDate || 0));
       case 'name':
       default:
         return arr.sort((a, b) => a.name.localeCompare(b.name));
     }
   }, [filtered, sortMode]);
 
-  // Split into favourites, foldered, and unfiled
+  // Flat ordered list of all visible branch names for shift-click range selection
+  const allVisibleNames = useMemo(() => sorted.map((b) => b.name), [sorted]);
+
+  const handleSelect = useCallback(
+    (name: string, e: React.MouseEvent) => {
+      if (e.shiftKey && lastClickedRef.current) {
+        // Range select
+        const startIdx = allVisibleNames.indexOf(lastClickedRef.current);
+        const endIdx = allVisibleNames.indexOf(name);
+        if (startIdx >= 0 && endIdx >= 0) {
+          const from = Math.min(startIdx, endIdx);
+          const to = Math.max(startIdx, endIdx);
+          const range = allVisibleNames.slice(from, to + 1);
+          setSelected((prev) => {
+            const next = new Set(prev);
+            range.forEach((n) => next.add(n));
+            return next;
+          });
+        }
+      } else if (e.ctrlKey || e.metaKey) {
+        // Toggle single
+        setSelected((prev) => {
+          const next = new Set(prev);
+          if (next.has(name)) next.delete(name);
+          else next.add(name);
+          return next;
+        });
+      } else {
+        // Single select (clear others)
+        setSelected(new Set([name]));
+      }
+      lastClickedRef.current = name;
+    },
+    [allVisibleNames],
+  );
+
+  const clearSelection = () => setSelected(new Set());
+
+  const selectedNames = [...selected].filter((n) =>
+    allVisibleNames.includes(n),
+  );
+  const deletableSelected = selectedNames.filter(
+    (n) => !localBranches.find((b) => b.name === n)?.current,
+  );
+
   const favBranches = sorted.filter((b) => favourites.has(b.name));
   const folderedNames = new Set(folders.flatMap((f) => f.branches));
   const unfiled = sorted.filter(
@@ -229,10 +244,7 @@ function BranchSection({
           onClick={() => setIsOpen(!isOpen)}
           className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-secondary hover:text-primary transition-colors flex-1 text-left"
         >
-          <motion.div
-            animate={{ rotate: isOpen ? 90 : 0 }}
-            transition={{ duration: 0.15 }}
-          >
+          <motion.div animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.15 }}>
             <ChevronRight className="w-3 h-3" />
           </motion.div>
           <GitBranch className="w-4 h-4" />
@@ -240,7 +252,6 @@ function BranchSection({
           <span className="text-tertiary font-normal">{localBranches.length}</span>
         </button>
 
-        {/* Sort toggle */}
         <div className="relative">
           <button
             onClick={() => setShowSortMenu(!showSortMenu)}
@@ -260,14 +271,9 @@ function BranchSection({
                 {(Object.keys(sortLabels) as BranchSortMode[]).map((mode) => (
                   <button
                     key={mode}
-                    onClick={() => {
-                      setSortMode(mode);
-                      setShowSortMenu(false);
-                    }}
+                    onClick={() => { setSortMode(mode); setShowSortMenu(false); }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
-                      sortMode === mode
-                        ? 'text-accent bg-accent-muted'
-                        : 'text-secondary hover:text-primary hover:bg-hover'
+                      sortMode === mode ? 'text-accent bg-accent-muted' : 'text-secondary hover:text-primary hover:bg-hover'
                     }`}
                   >
                     {sortLabels[mode].icon}
@@ -279,7 +285,6 @@ function BranchSection({
           </AnimatePresence>
         </div>
 
-        {/* Add folder */}
         <button
           onClick={() => setCreatingFolder(!creatingFolder)}
           className="p-1 rounded text-tertiary hover:text-primary hover:bg-hover transition-colors"
@@ -288,6 +293,43 @@ function BranchSection({
           <FolderPlus className="w-3 h-3" />
         </button>
       </div>
+
+      {/* Multi-select action bar */}
+      <AnimatePresence>
+        {selectedNames.length > 1 && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-muted border-y border-default">
+              <CheckCircle2 className="w-3.5 h-3.5 text-accent" />
+              <span className="text-xs text-accent font-medium flex-1">
+                {selectedNames.length} selected
+              </span>
+              {deletableSelected.length > 0 && (
+                <button
+                  onClick={() => {
+                    onDelete(deletableSelected);
+                    clearSelection();
+                  }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-danger-muted text-danger hover:bg-danger hover:text-white transition-colors"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Delete ({deletableSelected.length})
+                </button>
+              )}
+              <button
+                onClick={clearSelection}
+                className="p-0.5 rounded text-tertiary hover:text-primary hover:bg-hover transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence initial={false}>
         {isOpen && (
@@ -298,7 +340,6 @@ function BranchSection({
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            {/* Filter input */}
             {localBranches.length > 10 && (
               <div className="px-3 pb-1.5">
                 <input
@@ -311,7 +352,6 @@ function BranchSection({
               </div>
             )}
 
-            {/* Create folder input */}
             <AnimatePresence>
               {creatingFolder && (
                 <motion.div
@@ -328,15 +368,9 @@ function BranchSection({
                       placeholder="Folder name..."
                       className="flex-1 bg-input border border-default rounded px-2 py-1 text-xs text-primary placeholder:text-placeholder focus:outline-none focus:border-accent transition-colors"
                       autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleCreateFolder();
-                        if (e.key === 'Escape') setCreatingFolder(false);
-                      }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setCreatingFolder(false); }}
                     />
-                    <button
-                      onClick={handleCreateFolder}
-                      className="px-2 py-1 bg-accent text-text-inverse rounded text-xs hover:bg-accent-hover transition-colors"
-                    >
+                    <button onClick={handleCreateFolder} className="px-2 py-1 bg-accent text-text-inverse rounded text-xs hover:bg-accent-hover transition-colors">
                       Add
                     </button>
                   </div>
@@ -344,7 +378,6 @@ function BranchSection({
               )}
             </AnimatePresence>
 
-            {/* Favourites section */}
             {favBranches.length > 0 && (
               <div className="mb-1">
                 <div className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-warning">
@@ -355,36 +388,41 @@ function BranchSection({
                   <BranchRow
                     key={branch.name}
                     branch={branch}
+                    isSelected={selected.has(branch.name)}
+                    onSelect={(e) => handleSelect(branch.name, e)}
                     onCheckout={() => onCheckout(branch.name)}
+                    onDelete={() => onDelete([branch.name])}
                     showDate={sortMode !== 'name'}
                   />
                 ))}
               </div>
             )}
 
-            {/* Folders */}
             {folders.map((folder) => {
-              const folderBranches = sorted.filter((b) =>
-                folder.branches.includes(b.name),
-              );
+              const folderBranches = sorted.filter((b) => folder.branches.includes(b.name));
               if (filter && folderBranches.length === 0) return null;
               return (
                 <BranchFolder
                   key={folder.name}
                   folder={folder}
                   branches={folderBranches}
+                  selected={selected}
+                  onSelect={handleSelect}
                   onCheckout={onCheckout}
+                  onDelete={onDelete}
                   showDate={sortMode !== 'name'}
                 />
               );
             })}
 
-            {/* Unfiled branches */}
             {unfiled.map((branch) => (
               <BranchRow
                 key={branch.name}
                 branch={branch}
+                isSelected={selected.has(branch.name)}
+                onSelect={(e) => handleSelect(branch.name, e)}
                 onCheckout={() => onCheckout(branch.name)}
+                onDelete={() => onDelete([branch.name])}
                 showDate={sortMode !== 'name'}
               />
             ))}
@@ -406,12 +444,18 @@ function BranchSection({
 function BranchFolder({
   folder,
   branches,
+  selected,
+  onSelect,
   onCheckout,
+  onDelete,
   showDate,
 }: {
   folder: { name: string; branches: string[]; collapsed: boolean };
   branches: BranchInfo[];
+  selected: Set<string>;
+  onSelect: (name: string, e: React.MouseEvent) => void;
   onCheckout: (name: string) => void;
+  onDelete: (names: string[]) => void;
   showDate: boolean;
 }) {
   const toggleCollapse = useBranchPrefsStore((s) => s.toggleFolderCollapse);
@@ -433,10 +477,7 @@ function BranchFolder({
           onClick={() => toggleCollapse(folder.name)}
           className="w-full flex items-center gap-1.5 px-3 py-1 text-xs text-secondary hover:text-primary hover:bg-hover transition-colors"
         >
-          <motion.div
-            animate={{ rotate: folder.collapsed ? 0 : 90 }}
-            transition={{ duration: 0.15 }}
-          >
+          <motion.div animate={{ rotate: folder.collapsed ? 0 : 90 }} transition={{ duration: 0.15 }}>
             <ChevronRight className="w-3 h-3" />
           </motion.div>
           <Folder className="w-3 h-3 text-accent" />
@@ -457,7 +498,10 @@ function BranchFolder({
               <BranchRow
                 key={branch.name}
                 branch={branch}
+                isSelected={selected.has(branch.name)}
+                onSelect={(e) => onSelect(branch.name, e)}
                 onCheckout={() => onCheckout(branch.name)}
+                onDelete={() => onDelete([branch.name])}
                 showDate={showDate}
               />
             ))}
@@ -477,61 +521,98 @@ function BranchFolder({
 
 function BranchRow({
   branch,
+  isSelected,
+  onSelect,
   onCheckout,
+  onDelete,
   showDate = false,
 }: {
   branch: BranchInfo;
+  isSelected: boolean;
+  onSelect: (e: React.MouseEvent) => void;
   onCheckout?: () => void;
+  onDelete?: () => void;
   showDate?: boolean;
 }) {
   const toggleFavourite = useBranchPrefsStore((s) => s.toggleFavourite);
   const isFav = useBranchPrefsStore((s) => s.favourites.has(branch.name));
   const folders = useBranchPrefsStore((s) => s.folders);
   const addBranchToFolder = useBranchPrefsStore((s) => s.addBranchToFolder);
-  const removeBranchFromFolder = useBranchPrefsStore(
-    (s) => s.removeBranchFromFolder,
-  );
+  const removeBranchFromFolder = useBranchPrefsStore((s) => s.removeBranchFromFolder);
   const getFolderForBranch = useBranchPrefsStore((s) => s.getFolderForBranch);
 
   const currentFolder = getFolderForBranch(branch.name);
 
   const contextItems = [
+    // Checkout
     ...(onCheckout && !branch.current
-      ? [{ label: 'Checkout', icon: <GitCommit className="w-4 h-4" />, onClick: onCheckout }]
+      ? [{
+          label: 'Checkout',
+          icon: <GitCommit className="w-4 h-4" />,
+          onClick: onCheckout,
+        }]
       : []),
+    // Favourite
     {
       label: isFav ? 'Remove from Favourites' : 'Add to Favourites',
       icon: <Star className={`w-4 h-4 ${isFav ? 'fill-current text-warning' : ''}`} />,
       onClick: () => toggleFavourite(branch.name),
     },
-    { separator: true, label: '' },
-    ...folders.map((f) => ({
-      label: currentFolder === f.name ? `Remove from ${f.name}` : `Move to ${f.name}`,
-      icon: <Folder className="w-4 h-4" />,
-      onClick: () => {
-        if (currentFolder === f.name) {
-          removeBranchFromFolder(f.name, branch.name);
-        } else {
-          if (currentFolder) removeBranchFromFolder(currentFolder, branch.name);
-          addBranchToFolder(f.name, branch.name);
-        }
-      },
-    })),
+    // Folder actions
+    ...(folders.length > 0
+      ? [
+          { separator: true, label: '' },
+          ...folders.map((f) => ({
+            label: currentFolder === f.name ? `Remove from ${f.name}` : `Move to ${f.name}`,
+            icon: <Folder className="w-4 h-4" />,
+            onClick: () => {
+              if (currentFolder === f.name) {
+                removeBranchFromFolder(f.name, branch.name);
+              } else {
+                if (currentFolder) removeBranchFromFolder(currentFolder, branch.name);
+                addBranchToFolder(f.name, branch.name);
+              }
+            },
+          })),
+        ]
+      : []),
+    // Delete
+    ...(onDelete && !branch.current
+      ? [
+          { separator: true, label: '' },
+          {
+            label: 'Delete Branch',
+            icon: <Trash2 className="w-4 h-4" />,
+            danger: true,
+            onClick: onDelete,
+          },
+        ]
+      : []),
   ];
 
   const timeAgo = branch.lastCommitDate
-    ? formatDistanceToNow(new Date(branch.lastCommitDate * 1000), {
-        addSuffix: true,
-      })
+    ? formatDistanceToNow(new Date(branch.lastCommitDate * 1000), { addSuffix: true })
     : null;
 
   return (
     <ContextMenu items={contextItems}>
-      <button
-        onClick={onCheckout}
+      <div
+        onClick={(e) => {
+          // If shift/ctrl held, do selection; otherwise checkout
+          if (e.shiftKey || e.ctrlKey || e.metaKey) {
+            onSelect(e);
+          } else {
+            onSelect(e);
+            onCheckout?.();
+          }
+        }}
         className={`
-          w-full flex items-center gap-2 px-3 py-1 text-sm transition-colors group
-          ${branch.current ? 'text-accent bg-accent-muted' : 'text-secondary hover:text-primary hover:bg-hover'}
+          w-full flex items-center gap-2 px-3 py-1 text-sm transition-colors group cursor-pointer
+          ${branch.current
+            ? 'text-accent bg-accent-muted'
+            : isSelected
+              ? 'text-primary bg-accent/10 ring-1 ring-inset ring-accent/30'
+              : 'text-secondary hover:text-primary hover:bg-hover'}
         `}
       >
         <GitCommit className="w-3 h-3 flex-shrink-0" />
@@ -542,7 +623,6 @@ function BranchRow({
           )}
         </div>
 
-        {/* Fav star — visible on hover or if favourited */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -563,7 +643,7 @@ function BranchRow({
             {branch.behind ? <span className="text-danger">-{branch.behind}</span> : null}
           </span>
         )}
-      </button>
+      </div>
     </ContextMenu>
   );
 }
@@ -571,86 +651,50 @@ function BranchRow({
 // ─── Reusable components ────────────────────────────────────────────
 
 function NavItem({
-  icon,
-  label,
-  active,
-  onClick,
-  shortcut,
-  badge,
-  badgeColor,
+  icon, label, active, onClick, shortcut, badge, badgeColor,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  shortcut?: string;
-  badge?: string;
-  badgeColor?: 'warning' | 'danger' | 'accent';
+  icon: React.ReactNode; label: string; active: boolean; onClick: () => void;
+  shortcut?: string; badge?: string; badgeColor?: 'warning' | 'danger' | 'accent';
 }) {
   return (
     <button
       onClick={onClick}
-      className={`
-        w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors mb-0.5
-        ${active ? 'bg-accent-muted text-accent font-medium' : 'text-secondary hover:text-primary hover:bg-hover'}
-      `}
+      className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors mb-0.5 ${
+        active ? 'bg-accent-muted text-accent font-medium' : 'text-secondary hover:text-primary hover:bg-hover'
+      }`}
     >
       {icon}
       <span className="flex-1 text-left">{label}</span>
       {badge && (
-        <span
-          className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center text-text-inverse ${
-            badgeColor === 'warning'
-              ? 'bg-warning'
-              : badgeColor === 'danger'
-                ? 'bg-danger'
-                : 'bg-accent'
-          }`}
-        >
+        <span className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center text-text-inverse ${
+          badgeColor === 'warning' ? 'bg-warning' : badgeColor === 'danger' ? 'bg-danger' : 'bg-accent'
+        }`}>
           {badge}
         </span>
       )}
-      {shortcut && (
-        <kbd className="text-[10px] px-1 py-0.5 rounded bg-tertiary text-tertiary">
-          {shortcut}
-        </kbd>
-      )}
+      {shortcut && <kbd className="text-[10px] px-1 py-0.5 rounded bg-tertiary text-tertiary">{shortcut}</kbd>}
     </button>
   );
 }
 
 function CollapsibleSection({
-  icon,
-  title,
-  count,
-  defaultOpen = false,
-  children,
+  icon, title, count, defaultOpen = false, children,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  count?: number;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
+  icon: React.ReactNode; title: string; count?: number; defaultOpen?: boolean; children: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-
   return (
     <div className="mb-1">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-secondary hover:text-primary hover:bg-hover transition-colors"
       >
-        <motion.div
-          animate={{ rotate: isOpen ? 90 : 0 }}
-          transition={{ duration: 0.15 }}
-        >
+        <motion.div animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.15 }}>
           <ChevronRight className="w-3 h-3" />
         </motion.div>
         {icon}
         <span className="flex-1 text-left">{title}</span>
-        {count !== undefined && (
-          <span className="text-tertiary font-normal">{count}</span>
-        )}
+        {count !== undefined && <span className="text-tertiary font-normal">{count}</span>}
       </button>
       <AnimatePresence initial={false}>
         {isOpen && (

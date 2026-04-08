@@ -13,12 +13,12 @@ import {
   FileSearch,
   Loader2,
 } from 'lucide-react';
-import { useUIStore } from '../../stores/ui-store';
+import { useUIStore , useRepoPath } from '../../stores/ui-store';
 import { gitApi } from '../../api/git';
 import type { CommitNode } from '../../../shared/git-types';
 
 export function SearchView() {
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
   const setSelectedCommit = useUIStore((s) => s.setSelectedCommit);
   const setView = useUIStore((s) => s.setView);
   const [query, setQuery] = useState('');

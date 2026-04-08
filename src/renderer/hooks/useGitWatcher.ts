@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useUIStore } from '../stores/ui-store';
+import { useUIStore , useRepoPath } from '../stores/ui-store';
 
 export function useGitWatcher() {
   const queryClient = useQueryClient();
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
 
   useEffect(() => {
     if (!repoPath) return;

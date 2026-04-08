@@ -12,12 +12,12 @@ import {
 } from 'lucide-react';
 import { useStatus } from '../../hooks/useStatus';
 import { useRepository } from '../../hooks/useRepository';
-import { useUIStore } from '../../stores/ui-store';
+import { useUIStore , useRepoPath } from '../../stores/ui-store';
 import { gitApi } from '../../api/git';
 import type { FileStatus } from '../../../shared/git-types';
 
 export function ConflictView() {
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
   const { data: repo } = useRepository(repoPath);
   const { data: files } = useStatus(repoPath);
   const queryClient = useQueryClient();

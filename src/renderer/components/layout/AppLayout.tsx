@@ -3,7 +3,7 @@ import 'allotment/dist/style.css';
 import { TitleBar } from './TitleBar';
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
-import { useUIStore } from '../../stores/ui-store';
+import { useUIStore , useRepoPath, useCurrentView } from '../../stores/ui-store';
 import { Dashboard } from '../../features/dashboard/Dashboard';
 import { HistoryView } from '../../features/history/HistoryView';
 import { StagingView } from '../../features/staging/StagingView';
@@ -16,11 +16,12 @@ import { SubmodulePanel } from '../../features/submodules/SubmodulePanel';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export function AppLayout() {
-  const currentView = useUIStore((s) => s.currentView);
-  const repoPath = useUIStore((s) => s.repoPath);
+  const currentView = useCurrentView();
+  const repoPath = useRepoPath();
+  const tabs = useUIStore((s) => s.tabs);
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
 
-  if (!repoPath) {
+  if (tabs.length === 0) {
     return (
       <div className="h-screen flex flex-col">
         <TitleBar />
@@ -65,7 +66,7 @@ export function AppLayout() {
           <Allotment.Pane>
             <AnimatePresence mode="wait">
               <motion.div
-                key={currentView}
+                key={`${repoPath}-${currentView}`}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}

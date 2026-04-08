@@ -12,12 +12,12 @@ import {
   X,
   Loader2,
 } from 'lucide-react';
-import { useUIStore } from '../../stores/ui-store';
+import { useUIStore , useRepoPath } from '../../stores/ui-store';
 import { useRepository } from '../../hooks/useRepository';
 import { gitApi } from '../../api/git';
 
 export function RemotePanel() {
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
   const { data: repo } = useRepository(repoPath);
   const queryClient = useQueryClient();
 

@@ -14,7 +14,7 @@ import { gitApi } from '../../api/git';
 import { appApi } from '../../api/app';
 
 export function Dashboard() {
-  const setRepoPath = useUIStore((s) => s.setRepoPath);
+  const addTab = useUIStore((s) => s.addTab);
   const [recentRepos, setRecentRepos] = useState<string[]>([]);
   const [cloneUrl, setCloneUrl] = useState('');
   const [showClone, setShowClone] = useState(false);
@@ -27,7 +27,7 @@ export function Dashboard() {
     const path = await gitApi.openRepo();
     if (path) {
       await appApi.addRecentRepo(path);
-      setRepoPath(path);
+      addTab(path);
     }
   };
 
@@ -38,7 +38,7 @@ export function Dashboard() {
 
   const handleOpenRecent = async (path: string) => {
     await appApi.addRecentRepo(path);
-    setRepoPath(path);
+    addTab(path);
   };
 
   return (

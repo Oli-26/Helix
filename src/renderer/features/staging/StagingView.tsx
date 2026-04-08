@@ -13,13 +13,13 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useStatus } from '../../hooks/useStatus';
-import { useUIStore } from '../../stores/ui-store';
+import { useUIStore , useRepoPath } from '../../stores/ui-store';
 import { gitApi } from '../../api/git';
 import { DiffView } from '../diff/DiffView';
 import type { FileStatus } from '../../../shared/git-types';
 
 export function StagingView() {
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
   const { data: files, isLoading } = useStatus(repoPath);
   const queryClient = useQueryClient();
   const [commitMessage, setCommitMessage] = useState('');

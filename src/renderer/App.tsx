@@ -3,14 +3,14 @@ import { AppLayout } from './components/layout/AppLayout';
 import { CommandPalette } from './components/CommandPalette';
 import { ToastContainer } from './components/ui/Toast';
 import { useThemeStore } from './stores/theme-store';
-import { useUIStore } from './stores/ui-store';
+import { useUIStore , useRepoPath } from './stores/ui-store';
 import { useGitWatcher } from './hooks/useGitWatcher';
 
 export function App() {
   const theme = useThemeStore((s) => s.theme);
   const setView = useUIStore((s) => s.setView);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
   const setDiffViewMode = useUIStore((s) => s.setDiffViewMode);
   const diffViewMode = useUIStore((s) => s.diffViewMode);
 

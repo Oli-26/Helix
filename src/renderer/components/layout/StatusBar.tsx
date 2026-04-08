@@ -14,13 +14,13 @@ import {
 import { useRepository } from '../../hooks/useRepository';
 import { useStatus } from '../../hooks/useStatus';
 import { useBranches } from '../../hooks/useBranches';
-import { useUIStore } from '../../stores/ui-store';
+import { useUIStore , useRepoPath } from '../../stores/ui-store';
 import { gitApi } from '../../api/git';
 import { useQueryClient } from '@tanstack/react-query';
 import { AnimatedCounter } from '../ui/AnimatedCounter';
 
 export function StatusBar() {
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
   const setView = useUIStore((s) => s.setView);
   const { data: repo } = useRepository(repoPath);
   const { data: files } = useStatus(repoPath);

@@ -1,10 +1,49 @@
-<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="128" height="128" rx="28" fill="#0d1117"/>
-  <path d="M64 24 C64 24 44 44 44 64 C44 84 64 104 64 104" stroke="#58a6ff" stroke-width="6" stroke-linecap="round" fill="none"/>
-  <path d="M64 24 C64 24 84 44 84 64 C84 84 64 104 64 104" stroke="#3fb950" stroke-width="6" stroke-linecap="round" fill="none"/>
-  <circle cx="64" cy="24" r="6" fill="#58a6ff"/>
-  <circle cx="64" cy="64" r="6" fill="#bc8cff"/>
-  <circle cx="64" cy="104" r="6" fill="#3fb950"/>
-  <circle cx="44" cy="64" r="4" fill="#58a6ff"/>
-  <circle cx="84" cy="64" r="4" fill="#3fb950"/>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- Helix strand 1 (blue-purple) -->
+  <path d="M256 77 C336 120 336 180 256 223 C176 266 176 326 256 369 C336 412 336 472 256 435" stroke="url(#strand1)" stroke-width="24" stroke-linecap="round" fill="none"/>
+
+  <!-- Helix strand 2 (green-orange) -->
+  <path d="M256 77 C176 120 176 180 256 223 C336 266 336 326 256 369 C176 412 176 472 256 435" stroke="url(#strand2)" stroke-width="24" stroke-linecap="round" fill="none"/>
+
+  <!-- Connection rungs -->
+  <line x1="200" y1="150" x2="312" y2="150" stroke="#8b949e" stroke-width="8" stroke-linecap="round" opacity="0.25"/>
+  <line x1="200" y1="296" x2="312" y2="296" stroke="#8b949e" stroke-width="8" stroke-linecap="round" opacity="0.25"/>
+
+  <!-- Node dots - strand 1 -->
+  <circle cx="256" cy="77" r="14" fill="#58a6ff"/>
+  <circle cx="256" cy="77" r="20" fill="#58a6ff" opacity="0.2"/>
+  <circle cx="256" cy="223" r="14" fill="#bc8cff"/>
+  <circle cx="256" cy="223" r="20" fill="#bc8cff" opacity="0.2"/>
+  <circle cx="256" cy="369" r="14" fill="#58a6ff"/>
+  <circle cx="256" cy="369" r="20" fill="#58a6ff" opacity="0.2"/>
+
+  <!-- Node dots - strand crossings -->
+  <circle cx="296" cy="150" r="10" fill="#3fb950"/>
+  <circle cx="216" cy="150" r="10" fill="#58a6ff"/>
+  <circle cx="216" cy="296" r="10" fill="#3fb950"/>
+  <circle cx="296" cy="296" r="10" fill="#f78166"/>
+
+  <!-- Top/bottom accent dots -->
+  <circle cx="256" cy="435" r="12" fill="#3fb950"/>
+  <circle cx="256" cy="435" r="18" fill="#3fb950" opacity="0.2"/>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <linearGradient id="strand1" x1="256" y1="77" x2="256" y2="435">
+      <stop offset="0%" stop-color="#58a6ff"/>
+      <stop offset="50%" stop-color="#bc8cff"/>
+      <stop offset="100%" stop-color="#58a6ff"/>
+    </linearGradient>
+    <linearGradient id="strand2" x1="256" y1="77" x2="256" y2="435">
+      <stop offset="0%" stop-color="#3fb950"/>
+      <stop offset="50%" stop-color="#f78166"/>
+      <stop offset="100%" stop-color="#3fb950"/>
+    </linearGradient>
+  </defs>
 </svg>

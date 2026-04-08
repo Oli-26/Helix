@@ -19,7 +19,7 @@ import {
   Hash,
   Globe,
 } from 'lucide-react';
-import { useUIStore } from '../../stores/ui-store';
+import { useUIStore , useRepoPath } from '../../stores/ui-store';
 import { gitApi } from '../../api/git';
 import { toast } from '../../components/ui/Toast';
 import { ContextMenu } from '../../components/ui/ContextMenu';
@@ -28,7 +28,7 @@ import { SkeletonPanel } from '../../components/ui/Skeleton';
 import type { SubmoduleInfo } from '../../../shared/submodule-types';
 
 export function SubmodulePanel() {
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [addUrl, setAddUrl] = useState('');

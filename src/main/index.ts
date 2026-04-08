@@ -18,6 +18,7 @@ const createWindow = () => {
     width: 1400,
     height: 900,
     minWidth: 900,
+    icon: path.join(__dirname, '../../assets/icon.png'),
     minHeight: 600,
     frame: isMac, // frameless on Linux/Windows, native frame on Mac
     titleBarStyle: isMac ? 'hidden' : undefined,

@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Allotment } from 'allotment';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { formatDistanceToNow } from 'date-fns';
-import { GitCommit, Tag, GitBranch, Loader2, ChevronDown } from 'lucide-react';
+import { GitCommit, Tag, GitBranch, ChevronDown } from 'lucide-react';
 import { useCommitLog } from '../../hooks/useCommitLog';
-import { useUIStore } from '../../stores/ui-store';
+import { useRepository } from '../../hooks/useRepository';
+import { useUIStore , useRepoPath, useSelectedCommit } from '../../stores/ui-store';
 import type { CommitNode } from '../../../shared/git-types';
 import { CommitGraph } from './CommitGraph';
 import { CommitDetail } from './CommitDetail';
@@ -15,13 +16,41 @@ const INITIAL_COUNT = 500;
 const LOAD_MORE_COUNT = 500;
 
 export function HistoryView() {
-  const repoPath = useUIStore((s) => s.repoPath);
-  const selectedCommit = useUIStore((s) => s.selectedCommit);
+  const repoPath = useRepoPath();
+  const selectedCommit = useSelectedCommit();
   const setSelectedCommit = useUIStore((s) => s.setSelectedCommit);
   const [maxCount, setMaxCount] = useState(INITIAL_COUNT);
   const { data: commits, isLoading } = useCommitLog(repoPath, maxCount);
+  const { data: repo } = useRepository(repoPath);
   const [scrollTop, setScrollTop] = useState(0);
   const [visibleHeight, setVisibleHeight] = useState(800);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const prevBranchRef = useRef<string | null>(null);
+
+  // When the current branch changes, find and select its HEAD commit
+  useEffect(() => {
+    if (!repo?.currentBranch || !commits || commits.length === 0) return;
+    if (prevBranchRef.current === repo.currentBranch) return;
+    prevBranchRef.current = repo.currentBranch;
+
+    // Find the commit that has "HEAD -> branchName" in its refs
+    const headRef = `HEAD -> ${repo.currentBranch}`;
+    const idx = commits.findIndex((c) =>
+      c.refs.some((r) => r === headRef || r === repo.currentBranch),
+    );
+
+    if (idx >= 0) {
+      setSelectedCommit(commits[idx].hash);
+      // Scroll to that commit
+      setTimeout(() => {
+        virtuosoRef.current?.scrollToIndex({
+          index: idx,
+          align: 'center',
+          behavior: 'smooth',
+        });
+      }, 100);
+    }
+  }, [repo?.currentBranch, commits, setSelectedCommit]);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
@@ -52,11 +81,19 @@ export function HistoryView() {
     );
   }
 
+  // Find the HEAD commit index for highlight
+  const headRef = repo?.currentBranch
+    ? `HEAD -> ${repo.currentBranch}`
+    : null;
+  const headCommitHash = headRef
+    ? commits.find((c) => c.refs.some((r) => r === headRef))?.hash
+    : null;
+
   return (
     <Allotment vertical>
       <Allotment.Pane>
         <div className="h-full flex">
-          {/* Graph column — only show for manageable sizes */}
+          {/* Graph column */}
           {commits.length <= 200 && (
             <div className="overflow-hidden flex-shrink-0" style={{ marginTop: -scrollTop }}>
               <CommitGraph
@@ -70,11 +107,13 @@ export function HistoryView() {
           {/* Commit list */}
           <div className="flex-1 overflow-hidden">
             <Virtuoso
+              ref={virtuosoRef}
               data={commits}
               itemContent={(index, commit) => (
                 <CommitRow
                   commit={commit}
                   isSelected={selectedCommit === commit.hash}
+                  isHead={commit.hash === headCommitHash}
                   onClick={() => setSelectedCommit(commit.hash)}
                 />
               )}
@@ -109,10 +148,12 @@ export function HistoryView() {
 function CommitRow({
   commit,
   isSelected,
+  isHead,
   onClick,
 }: {
   commit: CommitNode;
   isSelected: boolean;
+  isHead: boolean;
   onClick: () => void;
 }) {
   const timeAgo = formatDistanceToNow(new Date(commit.authorDate * 1000), {
@@ -123,10 +164,14 @@ function CommitRow({
     <button
       onClick={onClick}
       className={`
-        w-full flex items-center gap-3 px-4 py-2 text-left border-b border-subtle transition-colors
-        ${isSelected ? 'bg-accent-muted' : 'hover:bg-hover'}
+        w-full flex items-center gap-3 px-4 py-2 text-left border-b transition-colors
+        ${isSelected ? 'bg-accent-muted border-accent/30' : isHead ? 'bg-success-muted border-success/20' : 'border-subtle hover:bg-hover'}
       `}
     >
+      {/* HEAD indicator dot */}
+      {isHead && (
+        <div className="w-2 h-2 rounded-full bg-success flex-shrink-0" title="HEAD" />
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           <span className="text-sm text-primary truncate">
@@ -138,7 +183,11 @@ function CommitRow({
             .map((ref) => (
               <span
                 key={ref}
-                className="inline-flex items-center gap-1 px-1.5 py-0 text-xs rounded bg-accent-muted text-accent font-medium flex-shrink-0"
+                className={`inline-flex items-center gap-1 px-1.5 py-0 text-xs rounded font-medium flex-shrink-0 ${
+                  ref.startsWith('HEAD -> ')
+                    ? 'bg-success-muted text-success'
+                    : 'bg-accent-muted text-accent'
+                }`}
               >
                 <GitBranch className="w-3 h-3" />
                 {ref.replace('HEAD -> ', '')}

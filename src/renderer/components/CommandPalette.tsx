@@ -18,7 +18,7 @@ import {
   FileEdit,
   Sidebar,
 } from 'lucide-react';
-import { useUIStore } from '../stores/ui-store';
+import { useUIStore , useRepoPath } from '../stores/ui-store';
 import { useThemeStore } from '../stores/theme-store';
 import { useBranches } from '../hooks/useBranches';
 import { gitApi } from '../api/git';
@@ -26,9 +26,9 @@ import { useQueryClient } from '@tanstack/react-query';
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
   const setView = useUIStore((s) => s.setView);
-  const setRepoPath = useUIStore((s) => s.setRepoPath);
+  const addTab = useUIStore((s) => s.addTab);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const diffViewMode = useUIStore((s) => s.diffViewMode);
   const setDiffViewMode = useUIStore((s) => s.setDiffViewMode);
@@ -61,7 +61,7 @@ export function CommandPalette() {
   const handleOpenRepo = async () => {
     const path = await gitApi.openRepo();
     if (path) {
-      setRepoPath(path);
+      addTab(path);
     }
     setOpen(false);
   };

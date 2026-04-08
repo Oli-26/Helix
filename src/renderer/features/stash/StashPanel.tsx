@@ -10,12 +10,12 @@ import {
   Clock,
   Loader2,
 } from 'lucide-react';
-import { useUIStore } from '../../stores/ui-store';
+import { useUIStore , useRepoPath } from '../../stores/ui-store';
 import { gitApi } from '../../api/git';
 import type { StashEntry } from '../../../shared/git-types';
 
 export function StashPanel() {
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [stashMessage, setStashMessage] = useState('');

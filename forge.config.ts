@@ -12,6 +12,7 @@ const config: ForgeConfig = {
     asar: true,
     name: 'Helix',
     executableName: 'helix',
+    icon: './assets/icon',
   },
   rebuildConfig: {},
   makers: [

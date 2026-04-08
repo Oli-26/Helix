@@ -12,11 +12,11 @@ import {
 } from 'lucide-react';
 import { useBranches } from '../../hooks/useBranches';
 import { useRepository } from '../../hooks/useRepository';
-import { useUIStore } from '../../stores/ui-store';
+import { useUIStore , useRepoPath } from '../../stores/ui-store';
 import { gitApi } from '../../api/git';
 
 export function BranchList() {
-  const repoPath = useUIStore((s) => s.repoPath);
+  const repoPath = useRepoPath();
   const { data: branches, isLoading } = useBranches(repoPath);
   const { data: repo } = useRepository(repoPath);
   const queryClient = useQueryClient();
