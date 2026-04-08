@@ -44,11 +44,11 @@ export function registerGitHandlers(): void {
 
   ipcMain.handle('git:commit-detail', async (_e, args) => {
     const service = getGitService(args.repoPath);
-    const [log, files] = await Promise.all([
-      service.getLog(1),
+    const [commit, files] = await Promise.all([
+      service.getCommitByHash(args.hash),
       service.getDiffForCommit(args.hash),
     ]);
-    return { commit: log[0], files };
+    return { commit, files };
   });
 
   // Status

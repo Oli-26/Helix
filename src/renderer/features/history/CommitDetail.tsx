@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -23,18 +23,19 @@ import type { DiffFile } from '../../../shared/git-types';
 export function CommitDetail({ hash }: { hash: string }) {
   const repoPath = useRepoPath();
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
+  const prevHashRef = useRef(hash);
+
+  // Reset expanded file when commit changes
+  if (prevHashRef.current !== hash) {
+    prevHashRef.current = hash;
+    if (expandedFile) setExpandedFile(null);
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['git', 'commit-detail', repoPath, hash],
     queryFn: () => gitApi.getCommitDetail(repoPath!, hash),
     enabled: !!repoPath && !!hash,
   });
-
-  // Reset expanded file when commit changes
-  const prevHash = useState(hash)[0];
-  if (prevHash !== hash && expandedFile) {
-    setExpandedFile(null);
-  }
 
   if (isLoading || !data) {
     return <SkeletonPanel rows={4} />;

@@ -95,6 +95,33 @@ export class GitService {
     });
   }
 
+  async getCommitByHash(hash: string): Promise<CommitNode | null> {
+    try {
+      const result = await this.git.raw([
+        'log',
+        '-1',
+        `--format=%H|%h|%P|%D|%an|%ae|%at|%s`,
+        hash,
+      ]);
+      const line = result.trim();
+      if (!line) return null;
+      const [h, abbreviatedHash, parentStr, refsStr, authorName, authorEmail, authorDateStr, ...subjectParts] =
+        line.split('|');
+      return {
+        hash: h,
+        abbreviatedHash,
+        parents: parentStr ? parentStr.split(' ').filter(Boolean) : [],
+        refs: refsStr ? refsStr.split(', ').filter(Boolean) : [],
+        authorName,
+        authorEmail,
+        authorDate: parseInt(authorDateStr, 10),
+        subject: subjectParts.join('|'),
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async getStatus(): Promise<FileStatus[]> {
     const status = await this.git.status();
     const files: FileStatus[] = [];
@@ -285,8 +312,30 @@ export class GitService {
   }
 
   async getDiffForCommit(hash: string): Promise<DiffFile[]> {
-    const raw = await this.git.raw(['diff', `${hash}~1`, hash]);
-    return parseUnifiedDiff(raw);
+    try {
+      // Use show which works for all commits including root and merges
+      const raw = await this.git.raw([
+        'show',
+        '--format=',     // suppress commit header
+        '--patch',
+        '--first-parent', // for merges, diff against first parent only
+        hash,
+      ]);
+      return parseUnifiedDiff(raw);
+    } catch {
+      // Fallback: try diff-tree for root commits
+      try {
+        const raw = await this.git.raw([
+          'diff-tree',
+          '-p',
+          '--root',
+          hash,
+        ]);
+        return parseUnifiedDiff(raw);
+      } catch {
+        return [];
+      }
+    }
   }
 
   async getBlame(
