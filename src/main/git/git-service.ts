@@ -137,7 +137,18 @@ export class GitService {
     const local: BranchInfo[] = [];
     const remote: BranchInfo[] = [];
 
+    // Filter out Claude Code worktree branches
+    const HIDDEN_BRANCH_PATTERNS = [
+      /^claude-worktree-/,
+      /^claude-agent-/,
+      /^worktree\//,
+      /^claude-code-/,
+    ];
+
     for (const [name, info] of Object.entries(summary.branches)) {
+      const shortName = info.name.replace(/^remotes\/[^/]+\//, '');
+      if (HIDDEN_BRANCH_PATTERNS.some((p) => p.test(shortName))) continue;
+
       const branch: BranchInfo = {
         name: info.name,
         current: info.current,
