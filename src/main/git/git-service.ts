@@ -141,6 +141,7 @@ export class GitService {
     const HIDDEN_BRANCH_PATTERNS = [
       /^claude-worktree-/,
       /^claude-agent-/,
+      /^worktree-agent-/,
       /^worktree\//,
       /^claude-code-/,
     ];
