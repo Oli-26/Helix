@@ -122,6 +122,26 @@ export function registerGitHandlers(): void {
     await service.rebase(args.onto);
   });
 
+  ipcMain.handle('git:cherry-pick', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.cherryPick(args.hash);
+  });
+
+  ipcMain.handle('git:revert', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.revertCommit(args.hash);
+  });
+
+  ipcMain.handle('git:reset', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.resetTo(args.hash, args.mode);
+  });
+
+  ipcMain.handle('git:stash-pop', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.stashPop(args.index);
+  });
+
   // Remotes
   ipcMain.handle('git:remotes', async (_e, args) => {
     const service = getGitService(args.repoPath);
@@ -164,10 +184,59 @@ export function registerGitHandlers(): void {
     await service.stashDrop(args.index);
   });
 
+  // Tags
+  ipcMain.handle('git:tags', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    return service.getTags();
+  });
+
+  ipcMain.handle('git:create-tag', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.createTag(args.name, args.hash, args.message, args.annotated);
+  });
+
+  ipcMain.handle('git:delete-tag', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.deleteTag(args.name);
+  });
+
+  ipcMain.handle('git:push-tag', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.pushTag(args.name, args.remote);
+  });
+
+  // Config
+  ipcMain.handle('git:get-config', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    return service.getGitConfig();
+  });
+
+  ipcMain.handle('git:set-config', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.setGitConfig(args.key, args.value, args.global);
+  });
+
+  // File listing
+  ipcMain.handle('git:ls-files', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    return service.getTrackedFiles();
+  });
+
   // Blame
   ipcMain.handle('git:blame', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getBlame(args.filePath);
+  });
+
+  // Stats
+  ipcMain.handle('git:stats', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    return service.getStats();
+  });
+
+  ipcMain.handle('git:file-constellation', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    return service.getFileConstellation(args.maxCommits);
   });
 
   // Search

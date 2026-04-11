@@ -108,3 +108,60 @@ export interface GraphLayoutResult {
   edges: GraphEdge[];
   maxLane: number;
 }
+
+export interface TagInfo {
+  name: string;
+  hash: string;
+  isAnnotated: boolean;
+  date?: number;
+  message?: string;
+  tagger?: string;
+}
+
+export interface GitConfig {
+  userName?: string;
+  userEmail?: string;
+  globalUserName?: string;
+  globalUserEmail?: string;
+}
+
+export interface RepoStats {
+  totalCommits: number;
+  firstCommitDate: number;
+  lastCommitDate: number;
+  contributors: ContributorStats[];
+  // Heatmap: day string "YYYY-MM-DD" → commit count
+  commitsByDay: Record<string, number>;
+  // Hour of day (0-23) → commit count
+  commitsByHour: number[];
+  // Day of week (0=Sun, 6=Sat) → commit count
+  commitsByDayOfWeek: number[];
+  // File extension → file count
+  languageBreakdown: Record<string, number>;
+}
+
+export interface ContributorStats {
+  name: string;
+  email: string;
+  commits: number;
+  firstCommit: number;
+  lastCommit: number;
+}
+
+export interface FileConstellationData {
+  nodes: ConstellationNode[];
+  edges: ConstellationEdge[];
+}
+
+export interface ConstellationNode {
+  id: number;
+  path: string;
+  ext: string;
+  changeCount: number;
+}
+
+export interface ConstellationEdge {
+  source: number;
+  target: number;
+  weight: number;
+}

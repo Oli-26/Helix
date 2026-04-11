@@ -51,6 +51,23 @@
     background-color: var(--color-accent-muted);
     color: var(--color-accent);
   }
+
+  /* Focus rings for keyboard navigation */
+  *:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Better default button transitions */
+  button, [role="button"] {
+    transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease, box-shadow 150ms ease;
+  }
+
+  /* Active press feedback */
+  button:active:not(:disabled), [role="button"]:active:not(:disabled) {
+    transform: scale(0.98);
+  }
 }
 
 @layer components {
@@ -87,5 +104,17 @@
   }
   .border-subtle {
     border-color: var(--color-border-subtle);
+  }
+  .bg-popover {
+    background-color: var(--color-bg-popover);
+  }
+  .bg-overlay {
+    background-color: var(--color-bg-overlay);
+  }
+  .bg-hover {
+    background-color: var(--color-bg-hover);
+  }
+  .bg-input {
+    background-color: var(--color-bg-input);
   }
 }

@@ -2,19 +2,14 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Upload,
-  Download,
-  RefreshCw,
-  Globe,
-  ChevronRight,
-  AlertTriangle,
-  Check,
-  X,
-  Loader2,
+  Upload, Download, RefreshCw, Globe, ChevronRight,
+  AlertTriangle, Check, X, Loader2, Copy, ExternalLink,
 } from 'lucide-react';
-import { useUIStore , useRepoPath } from '../../stores/ui-store';
+import { useRepoPath } from '../../stores/ui-store';
 import { useRepository } from '../../hooks/useRepository';
 import { gitApi } from '../../api/git';
+import { toast } from '../../components/ui/Toast';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 
 export function RemotePanel() {
   const repoPath = useRepoPath();
@@ -31,7 +26,7 @@ export function RemotePanel() {
     <div className="h-full flex flex-col bg-primary overflow-y-auto">
       {/* Quick actions */}
       <div className="p-4 border-b border-default">
-        <h2 className="text-sm font-semibold text-primary mb-3">
+        <h2 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">
           Quick Actions
         </h2>
         <div className="grid grid-cols-3 gap-2">
@@ -65,13 +60,13 @@ export function RemotePanel() {
       {/* Remotes list */}
       <div className="p-4">
         <h2 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">
-          <Globe className="w-4 h-4" />
+          <Globe className="w-4 h-4 text-accent" />
           Remotes
         </h2>
         {remotesQuery.data?.map((remote) => (
           <div
             key={remote.name}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-secondary mb-2"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-secondary mb-2 group hover:border-default border border-transparent transition-colors"
           >
             <Globe className="w-4 h-4 text-accent flex-shrink-0" />
             <div className="flex-1 min-w-0">
@@ -82,6 +77,16 @@ export function RemotePanel() {
                 {remote.fetchUrl}
               </div>
             </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(remote.fetchUrl);
+                toast.info('Copied URL');
+              }}
+              className="p-1.5 rounded text-tertiary hover:text-primary hover:bg-tertiary transition-colors opacity-0 group-hover:opacity-100"
+              title="Copy URL"
+            >
+              <Copy className="w-3 h-3" />
+            </button>
           </div>
         ))}
         {(!remotesQuery.data || remotesQuery.data.length === 0) && (
@@ -117,9 +122,11 @@ function RemoteActionButton({
       else await gitApi.fetch(repoPath);
       setStatus('success');
       queryClient.invalidateQueries({ queryKey: ['git'] });
+      toast.success(`${label} successful`);
       setTimeout(() => setStatus('idle'), 2000);
-    } catch {
+    } catch (err: any) {
       setStatus('error');
+      toast.error(`${label} failed`, err?.message || 'Unknown error');
       setTimeout(() => setStatus('idle'), 3000);
     }
   };
@@ -128,7 +135,13 @@ function RemoteActionButton({
     <button
       onClick={handleClick}
       disabled={!repoPath || status === 'loading'}
-      className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-default bg-secondary hover:bg-tertiary disabled:opacity-50 transition-colors"
+      className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border transition-all ${
+        status === 'success'
+          ? 'border-success/30 bg-success-muted'
+          : status === 'error'
+            ? 'border-danger/30 bg-danger-muted'
+            : 'border-default bg-secondary hover:bg-tertiary hover:border-default'
+      } disabled:opacity-50`}
     >
       {status === 'loading' ? (
         <Loader2 className="w-4 h-4 text-accent animate-spin" />
@@ -155,14 +168,27 @@ function PushSection({
   const [forcePush, setForcePush] = useState(false);
   const queryClient = useQueryClient();
 
+  // Confirm modal for force push
+  const [showForceConfirm, setShowForceConfirm] = useState(false);
+
   const pushMutation = useMutation({
     mutationFn: () =>
       gitApi.push(repoPath!, 'origin', currentBranch, forcePush),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['git'] });
       setExpanded(false);
+      toast.success('Push successful', `${currentBranch} → origin`);
     },
+    onError: (err: any) => toast.error('Push failed', err.message),
   });
+
+  const handlePush = () => {
+    if (forcePush) {
+      setShowForceConfirm(true);
+    } else {
+      pushMutation.mutate();
+    }
+  };
 
   return (
     <div className="border-b border-default">
@@ -170,7 +196,7 @@ function PushSection({
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-4 py-3 text-sm hover:bg-hover transition-colors"
       >
-        <motion.div animate={{ rotate: expanded ? 90 : 0 }}>
+        <motion.div animate={{ rotate: expanded ? 90 : 0 }} transition={{ duration: 0.15 }}>
           <ChevronRight className="w-4 h-4 text-tertiary" />
         </motion.div>
         <Upload className="w-4 h-4 text-accent" />
@@ -192,12 +218,12 @@ function PushSection({
                 </span>{' '}
                 to origin
               </div>
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
                   checked={forcePush}
                   onChange={(e) => setForcePush(e.target.checked)}
-                  className="rounded"
+                  className="rounded accent-[var(--color-accent)]"
                 />
                 <span className="text-secondary">Force push</span>
                 {forcePush && (
@@ -208,21 +234,33 @@ function PushSection({
                 )}
               </label>
               <button
-                onClick={() => pushMutation.mutate()}
+                onClick={handlePush}
                 disabled={!repoPath || pushMutation.isPending}
-                className="w-full py-2 bg-accent text-text-inverse rounded-lg text-sm font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                className={`w-full py-2 text-text-inverse rounded-lg text-sm font-medium disabled:opacity-50 transition-colors flex items-center justify-center gap-2 ${
+                  forcePush ? 'bg-warning hover:opacity-90' : 'bg-accent hover:bg-accent-hover'
+                }`}
               >
                 {pushMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Upload className="w-4 h-4" />
                 )}
-                {pushMutation.isPending ? 'Pushing...' : 'Push'}
+                {pushMutation.isPending ? 'Pushing...' : forcePush ? 'Force Push' : 'Push'}
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal
+        open={showForceConfirm}
+        title="Force Push"
+        message={`Force push "${currentBranch}" to origin? This will overwrite the remote branch history and may cause issues for other collaborators.`}
+        danger
+        confirmLabel="Force Push"
+        onConfirm={() => { pushMutation.mutate(); setShowForceConfirm(false); }}
+        onCancel={() => setShowForceConfirm(false)}
+      />
     </div>
   );
 }
@@ -237,7 +275,9 @@ function PullSection({ repoPath }: { repoPath: string | null }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['git'] });
       setExpanded(false);
+      toast.success('Pull successful', rebase ? 'Rebased' : 'Merged');
     },
+    onError: (err: any) => toast.error('Pull failed', err.message),
   });
 
   return (
@@ -246,7 +286,7 @@ function PullSection({ repoPath }: { repoPath: string | null }) {
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-4 py-3 text-sm hover:bg-hover transition-colors"
       >
-        <motion.div animate={{ rotate: expanded ? 90 : 0 }}>
+        <motion.div animate={{ rotate: expanded ? 90 : 0 }} transition={{ duration: 0.15 }}>
           <ChevronRight className="w-4 h-4 text-tertiary" />
         </motion.div>
         <Download className="w-4 h-4 text-success" />
@@ -261,12 +301,12 @@ function PullSection({ repoPath }: { repoPath: string | null }) {
             className="overflow-hidden"
           >
             <div className="px-4 pb-4 space-y-3">
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
                   checked={rebase}
                   onChange={(e) => setRebase(e.target.checked)}
-                  className="rounded"
+                  className="rounded accent-[var(--color-accent)]"
                 />
                 <span className="text-secondary">Rebase instead of merge</span>
               </label>

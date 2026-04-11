@@ -7,6 +7,13 @@ import type {
   StashEntry,
   DiffFile,
   RepoInfo,
+  TagInfo,
+  GitConfig,
+  RepoStats,
+  ContributorStats,
+  FileConstellationData,
+  ConstellationNode,
+  ConstellationEdge,
 } from '../../shared/git-types';
 import { parseUnifiedDiff } from './git-diff-parser';
 
@@ -97,16 +104,18 @@ export class GitService {
 
   async getCommitByHash(hash: string): Promise<CommitNode | null> {
     try {
+      // Use %x00 as body delimiter to safely parse multi-line bodies
       const result = await this.git.raw([
         'log',
         '-1',
-        `--format=%H|%h|%P|%D|%an|%ae|%at|%s`,
+        `--format=%H|%h|%P|%D|%an|%ae|%at|%s%x00%b`,
         hash,
       ]);
-      const line = result.trim();
-      if (!line) return null;
+      const raw = result.trim();
+      if (!raw) return null;
+      const [header, body] = raw.split('\0');
       const [h, abbreviatedHash, parentStr, refsStr, authorName, authorEmail, authorDateStr, ...subjectParts] =
-        line.split('|');
+        header.split('|');
       return {
         hash: h,
         abbreviatedHash,
@@ -116,6 +125,7 @@ export class GitService {
         authorEmail,
         authorDate: parseInt(authorDateStr, 10),
         subject: subjectParts.join('|'),
+        body: body?.trim() || undefined,
       };
     } catch {
       return null;
@@ -243,6 +253,22 @@ export class GitService {
     } else {
       await this.git.branch(['-d', name]);
     }
+  }
+
+  async cherryPick(hash: string): Promise<void> {
+    await this.git.raw(['cherry-pick', hash]);
+  }
+
+  async revertCommit(hash: string): Promise<void> {
+    await this.git.raw(['revert', hash]);
+  }
+
+  async resetTo(hash: string, mode: 'soft' | 'mixed' | 'hard' = 'mixed'): Promise<void> {
+    await this.git.raw(['reset', `--${mode}`, hash]);
+  }
+
+  async stashPop(index: number): Promise<void> {
+    await this.git.stash(['pop', `stash@{${index}}`]);
   }
 
   async merge(branch: string, noFf = false): Promise<void> {
@@ -391,6 +417,221 @@ export class GitService {
     }
 
     return result;
+  }
+
+  async getTags(): Promise<TagInfo[]> {
+    try {
+      const raw = await this.git.raw([
+        'tag',
+        '-l',
+        '--sort=-creatordate',
+        '--format=%(refname:short)|%(objectname:short)|%(objecttype)|%(creatordate:unix)|%(creator)|%(subject)',
+      ]);
+      const lines = raw.trim().split('\n').filter(Boolean);
+      return lines.map((line) => {
+        const [name, hash, objectType, dateStr, creator, ...msgParts] = line.split('|');
+        return {
+          name,
+          hash,
+          isAnnotated: objectType === 'tag',
+          date: dateStr ? parseInt(dateStr, 10) : undefined,
+          tagger: creator || undefined,
+          message: msgParts.join('|') || undefined,
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  async createTag(name: string, hash?: string, message?: string, annotated?: boolean): Promise<void> {
+    const args = ['tag'];
+    if (annotated || message) {
+      args.push('-a', name);
+      args.push('-m', message || name);
+    } else {
+      args.push(name);
+    }
+    if (hash) args.push(hash);
+    await this.git.raw(args);
+  }
+
+  async deleteTag(name: string): Promise<void> {
+    await this.git.raw(['tag', '-d', name]);
+  }
+
+  async pushTag(name: string, remote = 'origin'): Promise<void> {
+    await this.git.push(remote, name);
+  }
+
+  async getGitConfig(): Promise<GitConfig> {
+    const get = async (key: string, global = false): Promise<string | undefined> => {
+      try {
+        const args = global ? ['config', '--global', key] : ['config', key];
+        const result = await this.git.raw(args);
+        return result.trim() || undefined;
+      } catch {
+        return undefined;
+      }
+    };
+    const [userName, userEmail, globalUserName, globalUserEmail] = await Promise.all([
+      get('user.name'),
+      get('user.email'),
+      get('user.name', true),
+      get('user.email', true),
+    ]);
+    return { userName, userEmail, globalUserName, globalUserEmail };
+  }
+
+  async setGitConfig(key: string, value: string, global = false): Promise<void> {
+    const args = global ? ['config', '--global', key, value] : ['config', key, value];
+    await this.git.raw(args);
+  }
+
+  async getTrackedFiles(): Promise<string[]> {
+    const result = await this.git.raw(['ls-files']);
+    return result.trim().split('\n').filter(Boolean);
+  }
+
+  async getStats(): Promise<RepoStats> {
+    // Fetch all commits with author info and timestamps
+    const result = await this.git.raw([
+      'log',
+      '--all',
+      '--format=%an|%ae|%at',
+    ]);
+    const lines = result.trim().split('\n').filter(Boolean);
+
+    const contributorMap = new Map<string, ContributorStats>();
+    const commitsByDay: Record<string, number> = {};
+    const commitsByHour = new Array(24).fill(0);
+    const commitsByDayOfWeek = new Array(7).fill(0);
+    let firstCommitDate = Infinity;
+    let lastCommitDate = 0;
+
+    for (const line of lines) {
+      const [authorName, authorEmail, tsStr] = line.split('|');
+      const ts = parseInt(tsStr, 10);
+      if (isNaN(ts)) continue;
+
+      const date = new Date(ts * 1000);
+      if (ts < firstCommitDate) firstCommitDate = ts;
+      if (ts > lastCommitDate) lastCommitDate = ts;
+
+      // By day
+      const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      commitsByDay[dayKey] = (commitsByDay[dayKey] || 0) + 1;
+
+      // By hour & day of week
+      commitsByHour[date.getHours()]++;
+      commitsByDayOfWeek[date.getDay()]++;
+
+      // Contributors
+      const key = `${authorName}|${authorEmail}`;
+      const existing = contributorMap.get(key);
+      if (existing) {
+        existing.commits++;
+        if (ts < existing.firstCommit) existing.firstCommit = ts;
+        if (ts > existing.lastCommit) existing.lastCommit = ts;
+      } else {
+        contributorMap.set(key, {
+          name: authorName,
+          email: authorEmail,
+          commits: 1,
+          firstCommit: ts,
+          lastCommit: ts,
+        });
+      }
+    }
+
+    const contributors = Array.from(contributorMap.values())
+      .sort((a, b) => b.commits - a.commits);
+
+    // Language breakdown from tracked files
+    const filesRaw = await this.git.raw(['ls-files']);
+    const files = filesRaw.trim().split('\n').filter(Boolean);
+    const languageBreakdown: Record<string, number> = {};
+    for (const f of files) {
+      const dot = f.lastIndexOf('.');
+      const ext = dot > 0 ? f.slice(dot + 1).toLowerCase() : 'other';
+      languageBreakdown[ext] = (languageBreakdown[ext] || 0) + 1;
+    }
+
+    return {
+      totalCommits: lines.length,
+      firstCommitDate: firstCommitDate === Infinity ? 0 : firstCommitDate,
+      lastCommitDate,
+      contributors,
+      commitsByDay,
+      commitsByHour,
+      commitsByDayOfWeek,
+      languageBreakdown,
+    };
+  }
+
+  async getFileConstellation(maxCommits = 1000): Promise<FileConstellationData> {
+    // Get files changed per commit
+    const raw = await this.git.raw([
+      'log',
+      '--all',
+      '--name-only',
+      '--format=%x00',
+      `-n${maxCommits}`,
+    ]);
+
+    // Parse: commits are separated by \0, files by newlines
+    const commits = raw.split('\0').filter(Boolean);
+    const fileChangeCount = new Map<string, number>();
+    const coChangeCount = new Map<string, number>(); // "fileA\0fileB" → count
+
+    for (const block of commits) {
+      const files = block.trim().split('\n').filter(Boolean);
+      // Count individual file changes
+      for (const f of files) {
+        fileChangeCount.set(f, (fileChangeCount.get(f) || 0) + 1);
+      }
+      // Count pairwise co-changes (only if commit touches <= 30 files to avoid noise)
+      if (files.length >= 2 && files.length <= 30) {
+        for (let i = 0; i < files.length; i++) {
+          for (let j = i + 1; j < files.length; j++) {
+            const key = files[i] < files[j] ? `${files[i]}\0${files[j]}` : `${files[j]}\0${files[i]}`;
+            coChangeCount.set(key, (coChangeCount.get(key) || 0) + 1);
+          }
+        }
+      }
+    }
+
+    // Build nodes: only include files that appear at least twice
+    const relevantFiles = [...fileChangeCount.entries()]
+      .filter(([, count]) => count >= 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 300); // cap at 300 nodes for performance
+
+    const pathToId = new Map<string, number>();
+    const nodes: ConstellationNode[] = relevantFiles.map(([path, changeCount], i) => {
+      pathToId.set(path, i);
+      const dot = path.lastIndexOf('.');
+      const ext = dot > 0 ? path.slice(dot + 1).toLowerCase() : 'other';
+      return { id: i, path, ext, changeCount };
+    });
+
+    // Build edges: only between nodes that both exist, with weight >= 2
+    const edges: ConstellationEdge[] = [];
+    for (const [key, weight] of coChangeCount) {
+      if (weight < 2) continue;
+      const [a, b] = key.split('\0');
+      const sourceId = pathToId.get(a);
+      const targetId = pathToId.get(b);
+      if (sourceId !== undefined && targetId !== undefined) {
+        edges.push({ source: sourceId, target: targetId, weight });
+      }
+    }
+
+    // Sort edges by weight desc and cap for performance
+    edges.sort((a, b) => b.weight - a.weight);
+    const cappedEdges = edges.slice(0, 1500);
+
+    return { nodes, edges: cappedEdges };
   }
 
   async searchCommits(query: string): Promise<CommitNode[]> {

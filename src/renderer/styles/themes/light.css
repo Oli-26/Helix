@@ -5,6 +5,8 @@
   --color-bg-hover: #eaeef2;
   --color-bg-active: #dfe3e8;
   --color-bg-input: #ffffff;
+  --color-bg-popover: #ffffff;
+  --color-bg-overlay: rgba(0, 0, 0, 0.2);
 
   --color-border: #d0d7de;
   --color-border-subtle: #eaeef2;

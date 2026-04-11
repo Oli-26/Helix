@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type View = 'dashboard' | 'history' | 'staging' | 'branches' | 'remotes' | 'stashes' | 'conflicts' | 'search' | 'submodules';
+export type View = 'dashboard' | 'history' | 'staging' | 'branches' | 'remotes' | 'stashes' | 'conflicts' | 'search' | 'submodules' | 'blame' | 'stats' | 'constellation' | 'settings';
 
 export interface RepoTab {
   id: string;

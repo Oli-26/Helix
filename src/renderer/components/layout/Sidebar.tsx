@@ -4,7 +4,9 @@ import {
   GitBranch, GitCommit, Globe, Tag, Archive, ChevronRight,
   History, FileEdit, Upload, Search, AlertTriangle, FolderGit2,
   Star, ArrowUpDown, Folder, FolderPlus, X, SortAsc, Clock,
-  SortDesc, Trash2, CheckCircle2,
+  SortDesc, Trash2, CheckCircle2, FileSearch, Settings, Plus,
+  BarChart3,
+  Orbit,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useBranches } from '../../hooks/useBranches';
@@ -13,11 +15,11 @@ import { useStatus } from '../../hooks/useStatus';
 import { useUIStore, type View, useRepoPath, useCurrentView } from '../../stores/ui-store';
 import { useBranchPrefsStore, type BranchSortMode } from '../../stores/branch-prefs-store';
 import { gitApi } from '../../api/git';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { ContextMenu } from '../ui/ContextMenu';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { toast } from '../ui/Toast';
-import type { BranchInfo } from '../../../shared/git-types';
+import type { BranchInfo, TagInfo } from '../../../shared/git-types';
 
 export function Sidebar() {
   const repoPath = useRepoPath();
@@ -27,6 +29,31 @@ export function Sidebar() {
   const { data: repo } = useRepository(repoPath);
   const { data: status } = useStatus(repoPath);
   const queryClient = useQueryClient();
+
+  const currentBranch = branches.data?.local.find((b) => b.current);
+
+  // Tags
+  const tagsQuery = useQuery({
+    queryKey: ['git', 'tags', repoPath],
+    queryFn: () => gitApi.getTags(repoPath!),
+    enabled: !!repoPath,
+    staleTime: 10_000,
+  });
+
+  const deleteTagMutation = useMutation({
+    mutationFn: (name: string) => gitApi.deleteTag(repoPath!, name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['git', 'tags'] });
+      toast.success('Tag deleted');
+    },
+    onError: (err: any) => toast.error('Failed to delete tag', err.message),
+  });
+
+  const pushTagMutation = useMutation({
+    mutationFn: (name: string) => gitApi.pushTag(repoPath!, name),
+    onSuccess: () => toast.success('Tag pushed'),
+    onError: (err: any) => toast.error('Failed to push tag', err.message),
+  });
 
   // Confirm modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -106,10 +133,13 @@ export function Sidebar() {
     <div className="h-full bg-secondary flex flex-col border-r border-default overflow-hidden">
       <div className="px-2 py-3 border-b border-default flex-shrink-0">
         <NavItem icon={<History className="w-4 h-4" />} label="History" active={currentView === 'history'} onClick={() => setView('history')} />
-        <NavItem icon={<FileEdit className="w-4 h-4" />} label="Changes" active={currentView === 'staging'} onClick={() => setView('staging')} />
-        <NavItem icon={<Upload className="w-4 h-4" />} label="Remotes" active={currentView === 'remotes'} onClick={() => setView('remotes')} />
+        <NavItem icon={<FileEdit className="w-4 h-4" />} label="Changes" active={currentView === 'staging'} onClick={() => setView('staging')} badge={status && status.length > 0 ? String(status.length) : undefined} badgeColor="accent" />
+        <NavItem icon={<Upload className="w-4 h-4" />} label="Remotes" active={currentView === 'remotes'} onClick={() => setView('remotes')} badge={currentBranch && (currentBranch.ahead || currentBranch.behind) ? `${currentBranch.ahead || 0}/${currentBranch.behind || 0}` : undefined} badgeColor="accent" />
         <NavItem icon={<FolderGit2 className="w-4 h-4" />} label="Submodules" active={currentView === 'submodules'} onClick={() => setView('submodules')} />
+        <NavItem icon={<FileSearch className="w-4 h-4" />} label="Blame" active={currentView === 'blame'} onClick={() => setView('blame')} />
         <NavItem icon={<Search className="w-4 h-4" />} label="Search" active={currentView === 'search'} onClick={() => setView('search')} shortcut="Ctrl+K" />
+        <NavItem icon={<BarChart3 className="w-4 h-4" />} label="Stats" active={currentView === 'stats'} onClick={() => setView('stats')} />
+        <NavItem icon={<Orbit className="w-4 h-4" />} label="Constellation" active={currentView === 'constellation'} onClick={() => setView('constellation')} />
         {isInConflict && (
           <NavItem icon={<AlertTriangle className="w-4 h-4" />} label="Conflicts" active={currentView === 'conflicts'} onClick={() => setView('conflicts')} badge="!" badgeColor="warning" />
         )}
@@ -128,15 +158,31 @@ export function Sidebar() {
           ))}
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<Tag className="w-4 h-4" />} title="Tags" count={0}>
-          <div className="px-3 py-2 text-xs text-tertiary">No tags</div>
-        </CollapsibleSection>
+        <TagSection
+          tags={tagsQuery.data || []}
+          repoPath={repoPath}
+          onDelete={(name) => {
+            setConfirmModal({
+              open: true,
+              title: 'Delete tag?',
+              message: `Are you sure you want to delete tag "${name}"?`,
+              danger: true,
+              confirmLabel: 'Delete',
+              onConfirm: () => { closeModal(); deleteTagMutation.mutate(name); },
+            });
+          }}
+          onPush={(name) => pushTagMutation.mutate(name)}
+        />
 
         <CollapsibleSection icon={<Archive className="w-4 h-4" />} title="Stashes" count={0}>
           <button onClick={() => setView('stashes')} className="w-full px-3 py-2 text-xs text-accent hover:text-accent-hover text-left">
             Manage stashes...
           </button>
         </CollapsibleSection>
+      </div>
+
+      <div className="px-2 py-2 border-t border-default flex-shrink-0">
+        <NavItem icon={<Settings className="w-4 h-4" />} label="Settings" active={currentView === 'settings'} onClick={() => setView('settings')} />
       </div>
 
       <ConfirmModal
@@ -166,7 +212,11 @@ function BranchSection({
   const [isOpen, setIsOpen] = useState(true);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [creatingBranch, setCreatingBranch] = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
   const [newFolderName, setNewFolderName] = useState('');
+  const repoPath = useRepoPath();
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const lastClickedRef = useRef<string | null>(null);
 
@@ -247,6 +297,19 @@ function BranchSection({
     }
   };
 
+  const handleCreateBranch = async () => {
+    if (!newBranchName.trim() || !repoPath) return;
+    try {
+      await gitApi.createBranch(repoPath, newBranchName.trim());
+      queryClient.invalidateQueries({ queryKey: ['git'] });
+      toast.success('Branch created', newBranchName.trim());
+      setNewBranchName('');
+      setCreatingBranch(false);
+    } catch (err: any) {
+      toast.error('Failed to create branch', err.message);
+    }
+  };
+
   const sortLabels: Record<BranchSortMode, { icon: React.ReactNode; label: string }> = {
     name: { icon: <SortAsc className="w-3 h-3" />, label: 'Name' },
     'date-desc': { icon: <Clock className="w-3 h-3" />, label: 'Newest' },
@@ -284,7 +347,10 @@ function BranchSection({
             )}
           </AnimatePresence>
         </div>
-        <button onClick={() => setCreatingFolder(!creatingFolder)} className="p-1 rounded text-tertiary hover:text-primary hover:bg-hover transition-colors" title="Create folder">
+        <button onClick={() => { setCreatingBranch(!creatingBranch); setCreatingFolder(false); }} className="p-1 rounded text-tertiary hover:text-primary hover:bg-hover transition-colors" title="Create branch">
+          <Plus className="w-3 h-3" />
+        </button>
+        <button onClick={() => { setCreatingFolder(!creatingFolder); setCreatingBranch(false); }} className="p-1 rounded text-tertiary hover:text-primary hover:bg-hover transition-colors" title="Create folder">
           <FolderPlus className="w-3 h-3" />
         </button>
       </div>
@@ -320,6 +386,14 @@ function BranchSection({
             )}
 
             <AnimatePresence>
+              {creatingBranch && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden px-3 pb-1.5">
+                  <div className="flex gap-1">
+                    <input type="text" value={newBranchName} onChange={(e) => setNewBranchName(e.target.value)} placeholder="New branch name..." className="flex-1 bg-input border border-default rounded px-2 py-1 text-xs text-primary placeholder:text-placeholder focus:outline-none focus:border-accent transition-colors" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleCreateBranch(); if (e.key === 'Escape') setCreatingBranch(false); }} />
+                    <button onClick={handleCreateBranch} disabled={!newBranchName.trim()} className="px-2 py-1 bg-accent text-text-inverse rounded text-xs hover:bg-accent-hover disabled:opacity-50 transition-colors">Create</button>
+                  </div>
+                </motion.div>
+              )}
               {creatingFolder && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden px-3 pb-1.5">
                   <div className="flex gap-1">
@@ -507,6 +581,131 @@ function BranchRow({ branch, isSelected, onSelect, onCheckout, onDelete, showDat
         )}
       </div>
     </ContextMenu>
+  );
+}
+
+// ─── Tag Section ───────────────────────────────────────────────────
+
+function TagSection({ tags, repoPath, onDelete, onPush }: {
+  tags: TagInfo[];
+  repoPath: string | null;
+  onDelete: (name: string) => void;
+  onPush: (name: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [tagName, setTagName] = useState('');
+  const [tagMessage, setTagMessage] = useState('');
+  const queryClient = useQueryClient();
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      gitApi.createTag(repoPath!, tagName.trim(), undefined, tagMessage.trim() || undefined, !!tagMessage.trim()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['git', 'tags'] });
+      queryClient.invalidateQueries({ queryKey: ['git', 'log'] });
+      setTagName('');
+      setTagMessage('');
+      setCreating(false);
+      toast.success('Tag created', tagName.trim());
+    },
+    onError: (err: any) => toast.error('Failed to create tag', err.message),
+  });
+
+  return (
+    <div className="mb-1">
+      <div className="flex items-center gap-1 px-3 py-1.5">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-secondary hover:text-primary transition-colors flex-1 text-left"
+        >
+          <motion.div animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.15 }}>
+            <ChevronRight className="w-3 h-3" />
+          </motion.div>
+          <Tag className="w-4 h-4" />
+          <span>Tags</span>
+          <span className="text-tertiary font-normal">{tags.length}</span>
+        </button>
+        <button
+          onClick={() => { setIsOpen(true); setCreating(!creating); }}
+          className="p-1 rounded text-tertiary hover:text-primary hover:bg-hover transition-colors"
+          title="Create tag"
+        >
+          <Plus className="w-3 h-3" />
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+            <AnimatePresence>
+              {creating && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden px-3 pb-1.5">
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      value={tagName}
+                      onChange={(e) => setTagName(e.target.value)}
+                      placeholder="Tag name..."
+                      className="w-full bg-input border border-default rounded px-2 py-1 text-xs text-primary placeholder:text-placeholder focus:outline-none focus:border-accent transition-colors"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && tagName.trim()) createMutation.mutate();
+                        if (e.key === 'Escape') setCreating(false);
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={tagMessage}
+                      onChange={(e) => setTagMessage(e.target.value)}
+                      placeholder="Message (optional, makes annotated)..."
+                      className="w-full bg-input border border-default rounded px-2 py-1 text-xs text-primary placeholder:text-placeholder focus:outline-none focus:border-accent transition-colors"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && tagName.trim()) createMutation.mutate();
+                        if (e.key === 'Escape') setCreating(false);
+                      }}
+                    />
+                    <div className="flex justify-end gap-1">
+                      <button onClick={() => setCreating(false)} className="px-2 py-1 text-xs text-secondary hover:text-primary transition-colors">Cancel</button>
+                      <button
+                        onClick={() => createMutation.mutate()}
+                        disabled={!tagName.trim() || createMutation.isPending}
+                        className="px-2 py-1 bg-accent text-text-inverse rounded text-xs hover:bg-accent-hover disabled:opacity-50 transition-colors"
+                      >
+                        Create
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {tags.length === 0 && !creating && (
+              <div className="px-3 py-2 text-xs text-tertiary">No tags</div>
+            )}
+
+            {tags.map((tag) => (
+              <ContextMenu
+                key={tag.name}
+                items={[
+                  { label: 'Push Tag', icon: <Upload className="w-4 h-4" />, onClick: () => onPush(tag.name) },
+                  { separator: true, label: '' },
+                  { label: 'Delete Tag', icon: <Trash2 className="w-4 h-4" />, danger: true, onClick: () => onDelete(tag.name) },
+                ]}
+              >
+                <div className="w-full flex items-center gap-2 px-3 py-1 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors cursor-pointer">
+                  <Tag className="w-3 h-3 flex-shrink-0 text-accent" />
+                  <span className="flex-1 truncate">{tag.name}</span>
+                  {tag.isAnnotated && (
+                    <span className="text-[10px] px-1 py-0.5 rounded bg-accent-muted text-accent">annotated</span>
+                  )}
+                </div>
+              </ContextMenu>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 

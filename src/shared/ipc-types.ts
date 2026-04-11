@@ -6,6 +6,10 @@ import type {
   StashEntry,
   DiffFile,
   RepoInfo,
+  TagInfo,
+  GitConfig,
+  RepoStats,
+  FileConstellationData,
 } from './git-types';
 import type { SubmoduleInfo } from './submodule-types';
 
@@ -37,10 +41,6 @@ export interface IpcChannelMap {
   'git:stage': { args: { repoPath: string; files: string[] }; return: void };
   'git:unstage': {
     args: { repoPath: string; files: string[] };
-    return: void;
-  };
-  'git:stage-hunk': {
-    args: { repoPath: string; patch: string };
     return: void;
   };
   'git:discard-changes': {
@@ -87,6 +87,22 @@ export interface IpcChannelMap {
   };
   'git:rebase': {
     args: { repoPath: string; onto: string };
+    return: void;
+  };
+  'git:cherry-pick': {
+    args: { repoPath: string; hash: string };
+    return: void;
+  };
+  'git:revert': {
+    args: { repoPath: string; hash: string };
+    return: void;
+  };
+  'git:reset': {
+    args: { repoPath: string; hash: string; mode?: 'soft' | 'mixed' | 'hard' };
+    return: void;
+  };
+  'git:stash-pop': {
+    args: { repoPath: string; index: number };
     return: void;
   };
 
@@ -136,6 +152,35 @@ export interface IpcChannelMap {
       content: string;
     }>;
   };
+
+  // Tags
+  'git:tags': { args: { repoPath: string }; return: TagInfo[] };
+  'git:create-tag': {
+    args: { repoPath: string; name: string; hash?: string; message?: string; annotated?: boolean };
+    return: void;
+  };
+  'git:delete-tag': {
+    args: { repoPath: string; name: string };
+    return: void;
+  };
+  'git:push-tag': {
+    args: { repoPath: string; name: string; remote?: string };
+    return: void;
+  };
+
+  // Config
+  'git:get-config': { args: { repoPath: string }; return: GitConfig };
+  'git:set-config': {
+    args: { repoPath: string; key: string; value: string; global?: boolean };
+    return: void;
+  };
+
+  // File listing
+  'git:ls-files': { args: { repoPath: string }; return: string[] };
+
+  // Stats
+  'git:stats': { args: { repoPath: string }; return: RepoStats };
+  'git:file-constellation': { args: { repoPath: string; maxCommits?: number }; return: FileConstellationData };
 
   // Search
   'git:search-commits': {

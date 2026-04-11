@@ -13,6 +13,10 @@ import { StashPanel } from '../../features/stash/StashPanel';
 import { ConflictView } from '../../features/conflicts/ConflictView';
 import { SearchView } from '../../features/search/SearchView';
 import { SubmodulePanel } from '../../features/submodules/SubmodulePanel';
+import { BlameView } from '../../features/blame/BlameView';
+import { StatsView } from '../../features/stats/StatsView';
+import { ConstellationView } from '../../features/constellation/ConstellationView';
+import { SettingsView } from '../../features/settings/SettingsView';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export function AppLayout() {
@@ -48,6 +52,14 @@ export function AppLayout() {
         return <SearchView />;
       case 'submodules':
         return <SubmodulePanel />;
+      case 'blame':
+        return <BlameView />;
+      case 'stats':
+        return <StatsView />;
+      case 'constellation':
+        return <ConstellationView />;
+      case 'settings':
+        return <SettingsView />;
       default:
         return <HistoryView />;
     }

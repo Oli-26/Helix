@@ -49,6 +49,12 @@ export const gitApi = {
     window.api.invoke('git:merge', { repoPath, branch, noFf }),
   rebase: (repoPath: string, onto: string) =>
     window.api.invoke('git:rebase', { repoPath, onto }),
+  cherryPick: (repoPath: string, hash: string) =>
+    window.api.invoke('git:cherry-pick', { repoPath, hash }),
+  revertCommit: (repoPath: string, hash: string) =>
+    window.api.invoke('git:revert', { repoPath, hash }),
+  resetTo: (repoPath: string, hash: string, mode?: 'soft' | 'mixed' | 'hard') =>
+    window.api.invoke('git:reset', { repoPath, hash, mode }),
 
   // Remotes
   getRemotes: (repoPath: string) =>
@@ -69,10 +75,38 @@ export const gitApi = {
     window.api.invoke('git:stash-apply', { repoPath, index }),
   stashDrop: (repoPath: string, index: number) =>
     window.api.invoke('git:stash-drop', { repoPath, index }),
+  stashPop: (repoPath: string, index: number) =>
+    window.api.invoke('git:stash-pop', { repoPath, index }),
 
   // Blame
   getBlame: (repoPath: string, filePath: string) =>
     window.api.invoke('git:blame', { repoPath, filePath }),
+
+  // Tags
+  getTags: (repoPath: string) =>
+    window.api.invoke('git:tags', { repoPath }),
+  createTag: (repoPath: string, name: string, hash?: string, message?: string, annotated?: boolean) =>
+    window.api.invoke('git:create-tag', { repoPath, name, hash, message, annotated }),
+  deleteTag: (repoPath: string, name: string) =>
+    window.api.invoke('git:delete-tag', { repoPath, name }),
+  pushTag: (repoPath: string, name: string, remote?: string) =>
+    window.api.invoke('git:push-tag', { repoPath, name, remote }),
+
+  // Config
+  getGitConfig: (repoPath: string) =>
+    window.api.invoke('git:get-config', { repoPath }),
+  setGitConfig: (repoPath: string, key: string, value: string, global?: boolean) =>
+    window.api.invoke('git:set-config', { repoPath, key, value, global }),
+
+  // File listing
+  getTrackedFiles: (repoPath: string) =>
+    window.api.invoke('git:ls-files', { repoPath }),
+
+  // Stats
+  getStats: (repoPath: string) =>
+    window.api.invoke('git:stats', { repoPath }),
+  getFileConstellation: (repoPath: string, maxCommits?: number) =>
+    window.api.invoke('git:file-constellation', { repoPath, maxCommits }),
 
   // Search
   searchCommits: (repoPath: string, query: string) =>
