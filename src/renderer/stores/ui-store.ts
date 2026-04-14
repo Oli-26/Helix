@@ -32,6 +32,10 @@ interface UIState {
   toggleDetailPanel: () => void;
   diffViewMode: 'unified' | 'split';
   setDiffViewMode: (mode: 'unified' | 'split') => void;
+
+  // Search persistence
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 }
 
 let tabCounter = 0;
@@ -123,6 +127,9 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   diffViewMode: 'unified',
   setDiffViewMode: (mode) => set({ diffViewMode: mode }),
+
+  searchQuery: '',
+  setSearchQuery: (query) => set({ searchQuery: query }),
 }));
 
 // Selectors — derive active tab properties reactively

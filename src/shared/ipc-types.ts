@@ -182,6 +182,42 @@ export interface IpcChannelMap {
   'git:stats': { args: { repoPath: string }; return: RepoStats };
   'git:file-constellation': { args: { repoPath: string; maxCommits?: number }; return: FileConstellationData };
 
+  // Abort / Continue operations
+  'git:abort-merge': { args: { repoPath: string }; return: void };
+  'git:abort-rebase': { args: { repoPath: string }; return: void };
+  'git:abort-cherry-pick': { args: { repoPath: string }; return: void };
+  'git:continue-merge': { args: { repoPath: string }; return: void };
+  'git:continue-rebase': { args: { repoPath: string }; return: void };
+  'git:continue-cherry-pick': { args: { repoPath: string }; return: void };
+
+  // Remote management
+  'git:add-remote': { args: { repoPath: string; name: string; url: string }; return: void };
+  'git:remove-remote': { args: { repoPath: string; name: string }; return: void };
+  'git:rename-remote': { args: { repoPath: string; oldName: string; newName: string }; return: void };
+  'git:set-remote-url': { args: { repoPath: string; name: string; url: string }; return: void };
+
+  // Diff with options
+  'git:diff-file-options': {
+    args: { repoPath: string; filePath: string; staged?: boolean; ignoreWhitespace?: boolean; contextLines?: number };
+    return: DiffFile;
+  };
+
+  // Stash diff
+  'git:stash-diff': { args: { repoPath: string; index: number }; return: DiffFile[] };
+
+  // Filtered log
+  'git:log-filtered': {
+    args: { repoPath: string; maxCount?: number; branch?: string; author?: string; since?: string; until?: string; searchText?: string };
+    return: CommitNode[];
+  };
+
+  // Line-level staging
+  'git:stage-lines': { args: { repoPath: string; filePath: string; patch: string }; return: void };
+  'git:unstage-lines': { args: { repoPath: string; filePath: string; patch: string }; return: void };
+
+  // Clone directory picker
+  'git:pick-directory': { args: void; return: string | null };
+
   // Search
   'git:search-commits': {
     args: { repoPath: string; query: string };

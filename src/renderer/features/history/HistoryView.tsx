@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Allotment } from 'allotment';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { formatDistanceToNow } from 'date-fns';
@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   GitCommit, Tag, GitBranch, ChevronDown, CherryIcon, Undo2,
   RotateCcw, Copy, GitBranchPlus, Hash, Eye, Loader2,
+  Filter, X, User, Calendar,
 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCommitLog } from '../../hooks/useCommitLog';
@@ -39,6 +40,41 @@ export function HistoryView() {
   const [maxCount, setMaxCount] = useState(INITIAL_COUNT);
   const { data: commits, isLoading } = useCommitLog(repoPath, maxCount);
   const { data: repo } = useRepository(repoPath);
+
+  // Filter state
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterAuthor, setFilterAuthor] = useState('');
+  const [filterSince, setFilterSince] = useState('');
+  const [filterUntil, setFilterUntil] = useState('');
+  const [filterText, setFilterText] = useState('');
+
+  const hasActiveFilters = filterAuthor || filterSince || filterUntil || filterText;
+
+  // Filtered commits (client-side for responsiveness)
+  const filteredCommits = useMemo(() => {
+    if (!commits || !hasActiveFilters) return commits;
+    return commits.filter((c) => {
+      if (filterAuthor && !c.authorName.toLowerCase().includes(filterAuthor.toLowerCase())) return false;
+      if (filterText && !c.subject.toLowerCase().includes(filterText.toLowerCase())) return false;
+      if (filterSince) {
+        const sinceTs = new Date(filterSince).getTime() / 1000;
+        if (c.authorDate < sinceTs) return false;
+      }
+      if (filterUntil) {
+        const untilTs = new Date(filterUntil).getTime() / 1000 + 86400; // end of day
+        if (c.authorDate > untilTs) return false;
+      }
+      return true;
+    });
+  }, [commits, filterAuthor, filterSince, filterUntil, filterText, hasActiveFilters]);
+
+  const clearFilters = () => {
+    setFilterAuthor('');
+    setFilterSince('');
+    setFilterUntil('');
+    setFilterText('');
+  };
+
   const [scrollTop, setScrollTop] = useState(0);
   const [visibleHeight, setVisibleHeight] = useState(800);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -296,11 +332,105 @@ export function HistoryView() {
   return (
     <Allotment vertical>
       <Allotment.Pane>
-        <div className="h-full flex">
-          {commits.length <= 200 && (
+        <div className="h-full flex flex-col">
+          {/* Filter bar */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary border-b border-default flex-shrink-0">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                hasActiveFilters ? 'bg-accent-muted text-accent' : 'text-secondary hover:text-primary hover:bg-hover'
+              }`}
+            >
+              <Filter className="w-3 h-3" />
+              Filters
+              {hasActiveFilters && (
+                <span className="ml-1 w-4 h-4 rounded-full bg-accent text-text-inverse text-[10px] flex items-center justify-center">
+                  {[filterAuthor, filterSince, filterUntil, filterText].filter(Boolean).length}
+                </span>
+              )}
+            </button>
+            {hasActiveFilters && (
+              <>
+                <span className="text-xs text-tertiary">
+                  {filteredCommits?.length ?? 0} of {commits?.length ?? 0} commits
+                </span>
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-1 px-2 py-1 text-xs text-danger hover:bg-danger-muted rounded transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                  Clear
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Filter controls */}
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden border-b border-default flex-shrink-0"
+              >
+                <div className="grid grid-cols-2 gap-2 px-3 py-2 bg-tertiary">
+                  <div>
+                    <label className="flex items-center gap-1 text-[10px] text-tertiary uppercase tracking-wider mb-1">
+                      <User className="w-2.5 h-2.5" /> Author
+                    </label>
+                    <input
+                      type="text"
+                      value={filterAuthor}
+                      onChange={(e) => setFilterAuthor(e.target.value)}
+                      placeholder="Filter by author..."
+                      className="w-full bg-input border border-default rounded px-2 py-1 text-xs text-primary placeholder:text-placeholder focus:outline-none focus:border-accent transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1 text-[10px] text-tertiary uppercase tracking-wider mb-1">
+                      <Hash className="w-2.5 h-2.5" /> Message
+                    </label>
+                    <input
+                      type="text"
+                      value={filterText}
+                      onChange={(e) => setFilterText(e.target.value)}
+                      placeholder="Filter by message..."
+                      className="w-full bg-input border border-default rounded px-2 py-1 text-xs text-primary placeholder:text-placeholder focus:outline-none focus:border-accent transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1 text-[10px] text-tertiary uppercase tracking-wider mb-1">
+                      <Calendar className="w-2.5 h-2.5" /> Since
+                    </label>
+                    <input
+                      type="date"
+                      value={filterSince}
+                      onChange={(e) => setFilterSince(e.target.value)}
+                      className="w-full bg-input border border-default rounded px-2 py-1 text-xs text-primary focus:outline-none focus:border-accent transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1 text-[10px] text-tertiary uppercase tracking-wider mb-1">
+                      <Calendar className="w-2.5 h-2.5" /> Until
+                    </label>
+                    <input
+                      type="date"
+                      value={filterUntil}
+                      onChange={(e) => setFilterUntil(e.target.value)}
+                      className="w-full bg-input border border-default rounded px-2 py-1 text-xs text-primary focus:outline-none focus:border-accent transition-colors"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="flex-1 flex overflow-hidden">
+          {filteredCommits && filteredCommits.length <= 200 && !hasActiveFilters && (
             <div className="overflow-hidden flex-shrink-0" style={{ marginTop: -scrollTop }}>
               <CommitGraph
-                commits={commits}
+                commits={filteredCommits}
                 scrollTop={scrollTop}
                 visibleHeight={visibleHeight}
               />
@@ -310,7 +440,7 @@ export function HistoryView() {
           <div className="flex-1 overflow-hidden">
             <Virtuoso
               ref={virtuosoRef}
-              data={commits}
+              data={filteredCommits || []}
               itemContent={(index, commit) => (
                 <CommitRow
                   commit={commit}
@@ -378,6 +508,7 @@ export function HistoryView() {
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
         </div>
       </Allotment.Pane>
       {selectedCommit && (

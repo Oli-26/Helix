@@ -3,6 +3,7 @@ export const gitApi = {
   getRepoInfo: (repoPath: string) =>
     window.api.invoke('git:repo-info', { repoPath }),
   openRepo: () => window.api.invoke('git:open-repo'),
+  pickDirectory: () => window.api.invoke('git:pick-directory'),
   clone: (url: string, directory: string) =>
     window.api.invoke('git:clone', { url, directory }),
   init: (directory: string) =>
@@ -11,6 +12,8 @@ export const gitApi = {
   // Log
   getLog: (repoPath: string, maxCount?: number, branch?: string) =>
     window.api.invoke('git:log', { repoPath, maxCount, branch }),
+  getFilteredLog: (repoPath: string, options: { maxCount?: number; branch?: string; author?: string; since?: string; until?: string; searchText?: string }) =>
+    window.api.invoke('git:log-filtered', { repoPath, ...options }),
   getCommitDetail: (repoPath: string, hash: string) =>
     window.api.invoke('git:commit-detail', { repoPath, hash }),
 
@@ -25,6 +28,10 @@ export const gitApi = {
     window.api.invoke('git:unstage', { repoPath, files }),
   discardChanges: (repoPath: string, files: string[]) =>
     window.api.invoke('git:discard-changes', { repoPath, files }),
+  stageLines: (repoPath: string, filePath: string, patch: string) =>
+    window.api.invoke('git:stage-lines', { repoPath, filePath, patch }),
+  unstageLines: (repoPath: string, filePath: string, patch: string) =>
+    window.api.invoke('git:unstage-lines', { repoPath, filePath, patch }),
 
   // Commit
   commit: (repoPath: string, message: string, amend?: boolean) =>
@@ -33,6 +40,8 @@ export const gitApi = {
   // Diff
   getDiffForFile: (repoPath: string, filePath: string, staged?: boolean) =>
     window.api.invoke('git:diff-file', { repoPath, filePath, staged }),
+  getDiffForFileWithOptions: (repoPath: string, filePath: string, staged?: boolean, options?: { ignoreWhitespace?: boolean; contextLines?: number }) =>
+    window.api.invoke('git:diff-file-options', { repoPath, filePath, staged, ...options }),
   getDiffForCommit: (repoPath: string, hash: string) =>
     window.api.invoke('git:diff-commit', { repoPath, hash }),
 
@@ -56,6 +65,20 @@ export const gitApi = {
   resetTo: (repoPath: string, hash: string, mode?: 'soft' | 'mixed' | 'hard') =>
     window.api.invoke('git:reset', { repoPath, hash, mode }),
 
+  // Abort / Continue operations
+  abortMerge: (repoPath: string) =>
+    window.api.invoke('git:abort-merge', { repoPath }),
+  abortRebase: (repoPath: string) =>
+    window.api.invoke('git:abort-rebase', { repoPath }),
+  abortCherryPick: (repoPath: string) =>
+    window.api.invoke('git:abort-cherry-pick', { repoPath }),
+  continueMerge: (repoPath: string) =>
+    window.api.invoke('git:continue-merge', { repoPath }),
+  continueRebase: (repoPath: string) =>
+    window.api.invoke('git:continue-rebase', { repoPath }),
+  continueCherryPick: (repoPath: string) =>
+    window.api.invoke('git:continue-cherry-pick', { repoPath }),
+
   // Remotes
   getRemotes: (repoPath: string) =>
     window.api.invoke('git:remotes', { repoPath }),
@@ -65,6 +88,14 @@ export const gitApi = {
     window.api.invoke('git:pull', { repoPath, remote, rebase }),
   fetch: (repoPath: string, remote?: string) =>
     window.api.invoke('git:fetch', { repoPath, remote }),
+  addRemote: (repoPath: string, name: string, url: string) =>
+    window.api.invoke('git:add-remote', { repoPath, name, url }),
+  removeRemote: (repoPath: string, name: string) =>
+    window.api.invoke('git:remove-remote', { repoPath, name }),
+  renameRemote: (repoPath: string, oldName: string, newName: string) =>
+    window.api.invoke('git:rename-remote', { repoPath, oldName, newName }),
+  setRemoteUrl: (repoPath: string, name: string, url: string) =>
+    window.api.invoke('git:set-remote-url', { repoPath, name, url }),
 
   // Stash
   getStashList: (repoPath: string) =>
@@ -77,6 +108,8 @@ export const gitApi = {
     window.api.invoke('git:stash-drop', { repoPath, index }),
   stashPop: (repoPath: string, index: number) =>
     window.api.invoke('git:stash-pop', { repoPath, index }),
+  getStashDiff: (repoPath: string, index: number) =>
+    window.api.invoke('git:stash-diff', { repoPath, index }),
 
   // Blame
   getBlame: (repoPath: string, filePath: string) =>

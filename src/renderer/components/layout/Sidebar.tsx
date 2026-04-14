@@ -130,8 +130,8 @@ export function Sidebar() {
   };
 
   return (
-    <div className="h-full bg-secondary flex flex-col border-r border-default overflow-hidden">
-      <div className="px-2 py-3 border-b border-default flex-shrink-0">
+    <div className="h-full bg-secondary flex flex-col border-r border-default overflow-hidden" role="complementary" aria-label="Sidebar navigation">
+      <nav className="px-2 py-3 border-b border-default flex-shrink-0" role="navigation" aria-label="Main views">
         <NavItem icon={<History className="w-4 h-4" />} label="History" active={currentView === 'history'} onClick={() => setView('history')} />
         <NavItem icon={<FileEdit className="w-4 h-4" />} label="Changes" active={currentView === 'staging'} onClick={() => setView('staging')} badge={status && status.length > 0 ? String(status.length) : undefined} badgeColor="accent" />
         <NavItem icon={<Upload className="w-4 h-4" />} label="Remotes" active={currentView === 'remotes'} onClick={() => setView('remotes')} badge={currentBranch && (currentBranch.ahead || currentBranch.behind) ? `${currentBranch.ahead || 0}/${currentBranch.behind || 0}` : undefined} badgeColor="accent" />
@@ -143,7 +143,7 @@ export function Sidebar() {
         {isInConflict && (
           <NavItem icon={<AlertTriangle className="w-4 h-4" />} label="Conflicts" active={currentView === 'conflicts'} onClick={() => setView('conflicts')} badge="!" badgeColor="warning" />
         )}
-      </div>
+      </nav>
 
       <div className="flex-1 overflow-y-auto py-2">
         <BranchSection
@@ -716,11 +716,18 @@ function NavItem({ icon, label, active, onClick, shortcut, badge, badgeColor }: 
   shortcut?: string; badge?: string; badgeColor?: 'warning' | 'danger' | 'accent';
 }) {
   return (
-    <button onClick={onClick} className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors mb-0.5 ${active ? 'bg-accent-muted text-accent font-medium' : 'text-secondary hover:text-primary hover:bg-hover'}`}>
+    <button
+      onClick={onClick}
+      role="tab"
+      aria-selected={active}
+      aria-label={`${label}${badge ? ` (${badge})` : ''}${shortcut ? ` — ${shortcut}` : ''}`}
+      tabIndex={0}
+      className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors mb-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${active ? 'bg-accent-muted text-accent font-medium' : 'text-secondary hover:text-primary hover:bg-hover'}`}
+    >
       {icon}
       <span className="flex-1 text-left">{label}</span>
-      {badge && <span className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center text-text-inverse ${badgeColor === 'warning' ? 'bg-warning' : badgeColor === 'danger' ? 'bg-danger' : 'bg-accent'}`}>{badge}</span>}
-      {shortcut && <kbd className="text-[10px] px-1 py-0.5 rounded bg-tertiary text-tertiary">{shortcut}</kbd>}
+      {badge && <span className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center text-text-inverse ${badgeColor === 'warning' ? 'bg-warning' : badgeColor === 'danger' ? 'bg-danger' : 'bg-accent'}`} aria-hidden="true">{badge}</span>}
+      {shortcut && <kbd className="text-[10px] px-1 py-0.5 rounded bg-tertiary text-tertiary" aria-hidden="true">{shortcut}</kbd>}
     </button>
   );
 }
@@ -730,8 +737,12 @@ function CollapsibleSection({ icon, title, count, defaultOpen = false, children 
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <div className="mb-1">
-      <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-secondary hover:text-primary hover:bg-hover transition-colors">
+    <div className="mb-1" role="region" aria-label={title}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-secondary hover:text-primary hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
         <motion.div animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.15 }}><ChevronRight className="w-3 h-3" /></motion.div>
         {icon}
         <span className="flex-1 text-left">{title}</span>

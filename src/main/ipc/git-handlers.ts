@@ -5,7 +5,8 @@ import { startWatching } from '../git/git-watcher';
 import simpleGit from 'simple-git';
 
 export function registerGitHandlers(): void {
-  // Repository
+  // ─── Repository ──────────────────────────────────────────────────
+
   ipcMain.handle('git:repo-info', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getRepoInfo();
@@ -22,6 +23,15 @@ export function registerGitHandlers(): void {
     return repoPath;
   });
 
+  ipcMain.handle('git:pick-directory', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory'],
+      title: 'Choose Clone Destination',
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
+
   ipcMain.handle('git:clone', async (_e, args) => {
     const git = simpleGit();
     await git.clone(args.url, args.directory);
@@ -36,10 +46,16 @@ export function registerGitHandlers(): void {
     return args.directory;
   });
 
-  // Log / History
+  // ─── Log / History ───────────────────────────────────────────────
+
   ipcMain.handle('git:log', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getLog(args.maxCount, args.branch);
+  });
+
+  ipcMain.handle('git:log-filtered', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    return service.getFilteredLog(args);
   });
 
   ipcMain.handle('git:commit-detail', async (_e, args) => {
@@ -51,13 +67,15 @@ export function registerGitHandlers(): void {
     return { commit, files };
   });
 
-  // Status
+  // ─── Status ──────────────────────────────────────────────────────
+
   ipcMain.handle('git:status', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getStatus();
   });
 
-  // Staging
+  // ─── Staging ─────────────────────────────────────────────────────
+
   ipcMain.handle('git:stage', async (_e, args) => {
     const service = getGitService(args.repoPath);
     await service.stage(args.files);
@@ -69,21 +87,40 @@ export function registerGitHandlers(): void {
   });
 
   ipcMain.handle('git:discard-changes', async (_e, args) => {
-    const service = getGitService(args.repoPath);
     const git = simpleGit(args.repoPath);
     await git.checkout(['--', ...args.files]);
   });
 
-  // Commit
+  ipcMain.handle('git:stage-lines', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.stageLines(args.filePath, args.patch);
+  });
+
+  ipcMain.handle('git:unstage-lines', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.unstageLines(args.filePath, args.patch);
+  });
+
+  // ─── Commit ──────────────────────────────────────────────────────
+
   ipcMain.handle('git:commit', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.commit(args.message, args.amend);
   });
 
-  // Diff
+  // ─── Diff ────────────────────────────────────────────────────────
+
   ipcMain.handle('git:diff-file', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getDiffForFile(args.filePath, args.staged);
+  });
+
+  ipcMain.handle('git:diff-file-options', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    return service.getDiffForFileWithOptions(args.filePath, args.staged, {
+      ignoreWhitespace: args.ignoreWhitespace,
+      contextLines: args.contextLines,
+    });
   });
 
   ipcMain.handle('git:diff-commit', async (_e, args) => {
@@ -91,7 +128,8 @@ export function registerGitHandlers(): void {
     return service.getDiffForCommit(args.hash);
   });
 
-  // Branches
+  // ─── Branches ────────────────────────────────────────────────────
+
   ipcMain.handle('git:branches', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getBranches();
@@ -142,7 +180,40 @@ export function registerGitHandlers(): void {
     await service.stashPop(args.index);
   });
 
-  // Remotes
+  // ─── Abort / Continue ────────────────────────────────────────────
+
+  ipcMain.handle('git:abort-merge', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.abortMerge();
+  });
+
+  ipcMain.handle('git:abort-rebase', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.abortRebase();
+  });
+
+  ipcMain.handle('git:abort-cherry-pick', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.abortCherryPick();
+  });
+
+  ipcMain.handle('git:continue-merge', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.continueMerge();
+  });
+
+  ipcMain.handle('git:continue-rebase', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.continueRebase();
+  });
+
+  ipcMain.handle('git:continue-cherry-pick', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.continueCherryPick();
+  });
+
+  // ─── Remotes ─────────────────────────────────────────────────────
+
   ipcMain.handle('git:remotes', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getRemotes();
@@ -163,7 +234,28 @@ export function registerGitHandlers(): void {
     await service.fetch(args.remote);
   });
 
-  // Stash
+  ipcMain.handle('git:add-remote', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.addRemote(args.name, args.url);
+  });
+
+  ipcMain.handle('git:remove-remote', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.removeRemote(args.name);
+  });
+
+  ipcMain.handle('git:rename-remote', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.renameRemote(args.oldName, args.newName);
+  });
+
+  ipcMain.handle('git:set-remote-url', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    await service.setRemoteUrl(args.name, args.url);
+  });
+
+  // ─── Stash ───────────────────────────────────────────────────────
+
   ipcMain.handle('git:stash-list', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getStashList();
@@ -184,7 +276,13 @@ export function registerGitHandlers(): void {
     await service.stashDrop(args.index);
   });
 
-  // Tags
+  ipcMain.handle('git:stash-diff', async (_e, args) => {
+    const service = getGitService(args.repoPath);
+    return service.getStashDiff(args.index);
+  });
+
+  // ─── Tags ────────────────────────────────────────────────────────
+
   ipcMain.handle('git:tags', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getTags();
@@ -205,7 +303,8 @@ export function registerGitHandlers(): void {
     await service.pushTag(args.name, args.remote);
   });
 
-  // Config
+  // ─── Config ──────────────────────────────────────────────────────
+
   ipcMain.handle('git:get-config', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getGitConfig();
@@ -216,19 +315,22 @@ export function registerGitHandlers(): void {
     await service.setGitConfig(args.key, args.value, args.global);
   });
 
-  // File listing
+  // ─── File listing ────────────────────────────────────────────────
+
   ipcMain.handle('git:ls-files', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getTrackedFiles();
   });
 
-  // Blame
+  // ─── Blame ───────────────────────────────────────────────────────
+
   ipcMain.handle('git:blame', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getBlame(args.filePath);
   });
 
-  // Stats
+  // ─── Stats ───────────────────────────────────────────────────────
+
   ipcMain.handle('git:stats', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.getStats();
@@ -239,13 +341,15 @@ export function registerGitHandlers(): void {
     return service.getFileConstellation(args.maxCommits);
   });
 
-  // Search
+  // ─── Search ──────────────────────────────────────────────────────
+
   ipcMain.handle('git:search-commits', async (_e, args) => {
     const service = getGitService(args.repoPath);
     return service.searchCommits(args.query);
   });
 
-  // Submodules
+  // ─── Submodules ──────────────────────────────────────────────────
+
   ipcMain.handle('git:submodule-list', async (_e, args) => {
     const service = new GitSubmoduleService(args.repoPath);
     return service.list();

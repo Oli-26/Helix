@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
@@ -21,8 +21,16 @@ export function SearchView() {
   const repoPath = useRepoPath();
   const setSelectedCommit = useUIStore((s) => s.setSelectedCommit);
   const setView = useUIStore((s) => s.setView);
-  const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const persistedQuery = useUIStore((s) => s.searchQuery);
+  const setPersistedQuery = useUIStore((s) => s.setSearchQuery);
+
+  const [query, setQuery] = useState(persistedQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState(persistedQuery);
+
+  // Sync query back to store on change
+  useEffect(() => {
+    setPersistedQuery(query);
+  }, [query, setPersistedQuery]);
 
   const debounceTimeout = useCallback(
     (() => {
@@ -64,6 +72,7 @@ export function SearchView() {
             placeholder="Search commits by message, author, or hash..."
             className="w-full bg-input border border-default rounded-lg pl-10 pr-4 py-2.5 text-sm text-primary placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
             autoFocus
+            aria-label="Search commits"
           />
           {searchResults.isFetching && (
             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-accent animate-spin" />

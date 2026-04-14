@@ -594,7 +594,7 @@ export function StagingView() {
 
       <Allotment.Pane>
         {previewFile ? (
-          <DiffView filePath={previewFile.path} staged={previewFile.staged} />
+          <DiffView filePath={previewFile.path} staged={previewFile.staged} enableLineStaging />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-secondary">
             <Edit3 className="w-10 h-10 mb-3 text-tertiary" />

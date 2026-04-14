@@ -1,9 +1,18 @@
 import { ipcMain } from 'electron';
 import Store from 'electron-store';
 
+interface WindowBounds {
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+  isMaximized?: boolean;
+}
+
 interface AppStore {
   recentRepos: string[];
   settings: Record<string, unknown>;
+  windowBounds: WindowBounds;
 }
 
 const store = new Store<AppStore>({
@@ -14,8 +23,14 @@ const store = new Store<AppStore>({
       fontSize: 14,
       showLineNumbers: true,
     },
+    windowBounds: {
+      width: 1400,
+      height: 900,
+    },
   },
 });
+
+export { store };
 
 export function registerAppHandlers(): void {
   ipcMain.handle('app:get-recent-repos', () => {

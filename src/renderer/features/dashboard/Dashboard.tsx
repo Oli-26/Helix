@@ -8,16 +8,21 @@ import {
   Clock,
   ArrowRight,
   Folder,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { useUIStore } from '../../stores/ui-store';
 import { gitApi } from '../../api/git';
 import { appApi } from '../../api/app';
+import { toast } from '../../components/ui/Toast';
 
 export function Dashboard() {
   const addTab = useUIStore((s) => s.addTab);
   const [recentRepos, setRecentRepos] = useState<string[]>([]);
   const [cloneUrl, setCloneUrl] = useState('');
+  const [cloneDir, setCloneDir] = useState('');
   const [showClone, setShowClone] = useState(false);
+  const [cloning, setCloning] = useState(false);
 
   useEffect(() => {
     appApi.getRecentRepos().then(setRecentRepos);
@@ -31,14 +36,57 @@ export function Dashboard() {
     }
   };
 
+  const handlePickCloneDir = async () => {
+    const dir = await gitApi.pickDirectory();
+    if (dir) setCloneDir(dir);
+  };
+
   const handleClone = async () => {
     if (!cloneUrl.trim()) return;
-    // TODO: directory picker for clone destination
+    if (!cloneDir.trim()) {
+      toast.error('Choose a destination', 'Select a directory to clone into');
+      return;
+    }
+    // Derive folder name from URL
+    const repoName = cloneUrl.trim().replace(/\.git$/, '').split('/').pop() || 'repo';
+    const targetDir = `${cloneDir}/${repoName}`;
+
+    setCloning(true);
+    try {
+      const path = await gitApi.clone(cloneUrl.trim(), targetDir);
+      await appApi.addRecentRepo(path);
+      addTab(path);
+      setCloneUrl('');
+      setCloneDir('');
+      setShowClone(false);
+      toast.success('Cloned', repoName);
+    } catch (err: any) {
+      toast.error('Clone failed', err?.message || 'Unknown error');
+    } finally {
+      setCloning(false);
+    }
+  };
+
+  const handleInit = async () => {
+    const dir = await gitApi.pickDirectory();
+    if (!dir) return;
+    try {
+      const path = await gitApi.init(dir);
+      await appApi.addRecentRepo(path);
+      addTab(path);
+      toast.success('Initialized', dir);
+    } catch (err: any) {
+      toast.error('Init failed', err?.message || 'Unknown error');
+    }
   };
 
   const handleOpenRecent = async (path: string) => {
     await appApi.addRecentRepo(path);
     addTab(path);
+  };
+
+  const handleRemoveRecent = async (path: string) => {
+    setRecentRepos((prev) => prev.filter((r) => r !== path));
   };
 
   return (
@@ -85,7 +133,7 @@ export function Dashboard() {
             icon={<Plus className="w-5 h-5" />}
             title="Init"
             description="Create new repository"
-            onClick={handleOpen}
+            onClick={handleInit}
           />
         </motion.div>
 
@@ -97,21 +145,41 @@ export function Dashboard() {
             exit={{ opacity: 0, height: 0 }}
             className="mb-8"
           >
-            <div className="flex gap-2">
+            <div className="space-y-2">
               <input
                 type="text"
                 value={cloneUrl}
                 onChange={(e) => setCloneUrl(e.target.value)}
                 placeholder="https://github.com/user/repo.git"
-                className="flex-1 bg-input border border-default rounded-lg px-4 py-2.5 text-sm text-primary placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+                className="w-full bg-input border border-default rounded-lg px-4 py-2.5 text-sm text-primary placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
                 autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleClone();
+                }}
               />
-              <button
-                onClick={handleClone}
-                className="px-5 py-2.5 bg-accent text-text-inverse rounded-lg text-sm font-medium hover:bg-accent-hover transition-colors"
-              >
-                Clone
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handlePickCloneDir}
+                  className="flex-1 flex items-center gap-2 bg-input border border-default rounded-lg px-4 py-2.5 text-sm text-left hover:bg-hover transition-colors"
+                >
+                  <FolderOpen className="w-4 h-4 text-tertiary flex-shrink-0" />
+                  <span className={cloneDir ? 'text-primary truncate' : 'text-placeholder'}>
+                    {cloneDir || 'Choose destination folder...'}
+                  </span>
+                </button>
+                <button
+                  onClick={handleClone}
+                  disabled={cloning || !cloneUrl.trim() || !cloneDir.trim()}
+                  className="px-5 py-2.5 bg-accent text-text-inverse rounded-lg text-sm font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  {cloning ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  Clone
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
@@ -129,22 +197,33 @@ export function Dashboard() {
             </h2>
             <div className="space-y-1">
               {recentRepos.map((repoPath) => (
-                <button
+                <div
                   key={repoPath}
-                  onClick={() => handleOpenRecent(repoPath)}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-hover transition-colors group text-left"
                 >
-                  <Folder className="w-4 h-4 text-accent flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-primary truncate">
-                      {repoPath.split('/').pop()}
+                  <button
+                    onClick={() => handleOpenRecent(repoPath)}
+                    className="flex items-center gap-3 flex-1 min-w-0"
+                  >
+                    <Folder className="w-4 h-4 text-accent flex-shrink-0" />
+                    <div className="flex-1 min-w-0 text-left">
+                      <div className="text-sm font-medium text-primary truncate">
+                        {repoPath.split('/').pop()}
+                      </div>
+                      <div className="text-xs text-tertiary truncate">
+                        {repoPath}
+                      </div>
                     </div>
-                    <div className="text-xs text-tertiary truncate">
-                      {repoPath}
-                    </div>
-                  </div>
+                  </button>
+                  <button
+                    onClick={() => handleRemoveRecent(repoPath)}
+                    className="p-1 rounded text-tertiary hover:text-danger hover:bg-danger-muted transition-colors opacity-0 group-hover:opacity-100"
+                    title="Remove from recent"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                   <ArrowRight className="w-4 h-4 text-tertiary opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
+                </div>
               ))}
             </div>
           </motion.div>

@@ -72,12 +72,31 @@ export function StatusBar() {
     return `${Math.floor(diff / 3600000)}h ago`;
   };
 
+  // Listen for operation progress events from main process
+  const [activeOperation, setActiveOperation] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = (...args: unknown[]) => {
+      const data = args[0] as { operation: string; progress: number } | undefined;
+      if (!data) return;
+      if (data.progress >= 100) {
+        setActiveOperation(null);
+      } else {
+        setActiveOperation(data.operation);
+      }
+    };
+    const unsub = window.api?.on?.('git:operation-progress', handler);
+    return () => {
+      unsub?.();
+    };
+  }, []);
+
   if (!repoPath) return null;
 
   const state = stateConfig[repo?.state || 'clean'];
 
   return (
-    <div className="flex items-center justify-between h-7 px-3 bg-secondary border-t border-default text-[11px] select-none flex-shrink-0">
+    <div className="flex items-center justify-between h-7 px-3 bg-secondary border-t border-default text-[11px] select-none flex-shrink-0" role="status" aria-live="polite">
       {/* Left side */}
       <div className="flex items-center gap-3">
         {/* Branch */}
@@ -124,12 +143,21 @@ export function StatusBar() {
           </button>
         )}
 
+        {/* Active operation indicator */}
+        {activeOperation && (
+          <span className="flex items-center gap-1 text-accent">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            <span className="capitalize">{activeOperation}...</span>
+          </span>
+        )}
+
         {/* Sync button */}
         <button
           onClick={handleFetch}
           disabled={fetching}
           className="flex items-center gap-1 text-tertiary hover:text-primary disabled:opacity-50 transition-colors"
           title={`Fetch all remotes${lastFetch ? ` (last: ${lastFetch.toLocaleTimeString()})` : ''}`}
+          aria-label="Fetch all remotes"
         >
           <RefreshCw className={`w-3 h-3 ${fetching ? 'animate-spin text-accent' : ''}`} />
         </button>

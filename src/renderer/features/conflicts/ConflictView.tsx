@@ -12,8 +12,9 @@ import {
 } from 'lucide-react';
 import { useStatus } from '../../hooks/useStatus';
 import { useRepository } from '../../hooks/useRepository';
-import { useUIStore , useRepoPath } from '../../stores/ui-store';
+import { useRepoPath } from '../../stores/ui-store';
 import { gitApi } from '../../api/git';
+import { toast } from '../../components/ui/Toast';
 import type { FileStatus } from '../../../shared/git-types';
 
 export function ConflictView() {
@@ -34,17 +35,38 @@ export function ConflictView() {
 
   const abortMutation = useMutation({
     mutationFn: async () => {
-      // Abort the current operation
-      const git = repoPath!;
+      if (!repoPath) return;
       if (repo?.state === 'merging') {
-        await window.api.invoke('git:merge' as any, {
-          repoPath: git,
-          branch: '--abort',
-        });
+        await gitApi.abortMerge(repoPath);
+      } else if (repo?.state === 'rebasing') {
+        await gitApi.abortRebase(repoPath);
+      } else if (repo?.state === 'cherry-picking') {
+        await gitApi.abortCherryPick(repoPath);
       }
-      // For rebase/cherry-pick, we'd need specific abort commands
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['git'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['git'] });
+      toast.success('Operation aborted');
+    },
+    onError: (err: any) => toast.error('Abort failed', err.message),
+  });
+
+  const continueMutation = useMutation({
+    mutationFn: async () => {
+      if (!repoPath) return;
+      if (repo?.state === 'merging') {
+        await gitApi.continueMerge(repoPath);
+      } else if (repo?.state === 'rebasing') {
+        await gitApi.continueRebase(repoPath);
+      } else if (repo?.state === 'cherry-picking') {
+        await gitApi.continueCherryPick(repoPath);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['git'] });
+      toast.success('Operation continued');
+    },
+    onError: (err: any) => toast.error('Continue failed', err.message),
   });
 
   const markResolvedMutation = useMutation({
@@ -133,8 +155,16 @@ export function ConflictView() {
             <div className="text-xs text-secondary mb-4">
               You can now continue the {stateLabel[repo?.state || 'clean'].toLowerCase()}
             </div>
-            <button className="px-4 py-2 bg-success text-white rounded-lg text-sm font-medium hover:opacity-90 transition-colors inline-flex items-center gap-2">
-              <ArrowRight className="w-4 h-4" />
+            <button
+              onClick={() => continueMutation.mutate()}
+              disabled={continueMutation.isPending}
+              className="px-4 py-2 bg-success text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-colors inline-flex items-center gap-2"
+            >
+              {continueMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ArrowRight className="w-4 h-4" />
+              )}
               Continue {stateLabel[repo?.state || 'clean']}
             </button>
           </div>

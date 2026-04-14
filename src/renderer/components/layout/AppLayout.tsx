@@ -17,6 +17,7 @@ import { BlameView } from '../../features/blame/BlameView';
 import { StatsView } from '../../features/stats/StatsView';
 import { ConstellationView } from '../../features/constellation/ConstellationView';
 import { SettingsView } from '../../features/settings/SettingsView';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export function AppLayout() {
@@ -85,7 +86,9 @@ export function AppLayout() {
                 transition={{ duration: 0.15 }}
                 className="h-full"
               >
-                {renderView()}
+                <ErrorBoundary key={`${repoPath}-${currentView}`} fallbackTitle={`Error loading ${currentView} view`}>
+                  {renderView()}
+                </ErrorBoundary>
               </motion.div>
             </AnimatePresence>
           </Allotment.Pane>

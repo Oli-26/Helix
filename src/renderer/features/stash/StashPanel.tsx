@@ -203,8 +203,8 @@ function StashItem({
 }) {
   // Fetch diff for this stash when expanded
   const { data: diffFiles } = useQuery({
-    queryKey: ['git', 'diff-commit', repoPath, stash.hash],
-    queryFn: () => gitApi.getDiffForCommit(repoPath, stash.hash),
+    queryKey: ['git', 'stash-diff', repoPath, stash.index],
+    queryFn: () => gitApi.getStashDiff(repoPath, stash.index),
     enabled: isExpanded,
   });
 

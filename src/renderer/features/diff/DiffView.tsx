@@ -1,27 +1,89 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Columns2, Rows3, FileText, Copy, Check } from 'lucide-react';
+import { Columns2, Rows3, FileText, Copy, Check, EyeOff, AlignJustify } from 'lucide-react';
 import { gitApi } from '../../api/git';
 import { useUIStore , useRepoPath } from '../../stores/ui-store';
 import { UnifiedDiff } from './UnifiedDiff';
 import { SplitDiff } from './SplitDiff';
-import type { DiffFile } from '../../../shared/git-types';
+import { toast } from '../../components/ui/Toast';
+import type { DiffFile, DiffHunk } from '../../../shared/git-types';
 
 interface DiffViewProps {
   filePath?: string;
   staged?: boolean;
   commitHash?: string;
+  enableLineStaging?: boolean;
 }
 
-export function DiffView({ filePath, staged, commitHash }: DiffViewProps) {
+// Generate a unified diff patch from selected lines
+function buildPatchFromSelection(file: DiffFile, selectedLines: Set<string>): string {
+  const lines: string[] = [];
+  lines.push(`--- a/${file.oldPath}`);
+  lines.push(`+++ b/${file.newPath}`);
+
+  for (let hunkIndex = 0; hunkIndex < file.hunks.length; hunkIndex++) {
+    const hunk = file.hunks[hunkIndex];
+    const hunkLines: string[] = [];
+    let hasSelectedInHunk = false;
+
+    for (let lineIndex = 0; lineIndex < hunk.lines.length; lineIndex++) {
+      const lineKey = `${hunkIndex}-${lineIndex}`;
+      const line = hunk.lines[lineIndex];
+      if (selectedLines.has(lineKey)) {
+        hasSelectedInHunk = true;
+        if (line.type === 'add') {
+          hunkLines.push(`+${line.content}`);
+        } else if (line.type === 'delete') {
+          hunkLines.push(`-${line.content}`);
+        }
+      } else {
+        // Non-selected changes become context
+        if (line.type === 'context') {
+          hunkLines.push(` ${line.content}`);
+        } else if (line.type === 'delete') {
+          // Keep deleted lines as context (they exist in the original)
+          hunkLines.push(` ${line.content}`);
+        }
+        // Non-selected adds are omitted
+      }
+    }
+
+    if (hasSelectedInHunk) {
+      // Recalculate hunk header based on actual content
+      let oldCount = 0;
+      let newCount = 0;
+      for (const l of hunkLines) {
+        if (l.startsWith(' ')) { oldCount++; newCount++; }
+        else if (l.startsWith('-')) { oldCount++; }
+        else if (l.startsWith('+')) { newCount++; }
+      }
+      lines.push(`@@ -${hunk.oldStart},${oldCount} +${hunk.newStart},${newCount} @@`);
+      lines.push(...hunkLines);
+    }
+  }
+
+  return lines.join('\n') + '\n';
+}
+
+export function DiffView({ filePath, staged, commitHash, enableLineStaging }: DiffViewProps) {
   const repoPath = useRepoPath();
   const diffViewMode = useUIStore((s) => s.diffViewMode);
   const setDiffViewMode = useUIStore((s) => s.setDiffViewMode);
+  const queryClient = useQueryClient();
+
+  // Diff options
+  const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
+  const [contextLines, setContextLines] = useState(3);
+
+  // Moved handleStageLines below files declaration
 
   const fileDiff = useQuery({
-    queryKey: ['git', 'diff-file', repoPath, filePath, staged],
-    queryFn: () => gitApi.getDiffForFile(repoPath!, filePath!, staged),
+    queryKey: ['git', 'diff-file', repoPath, filePath, staged, ignoreWhitespace, contextLines],
+    queryFn: () =>
+      (ignoreWhitespace || contextLines !== 3)
+        ? gitApi.getDiffForFileWithOptions(repoPath!, filePath!, staged, { ignoreWhitespace, contextLines })
+        : gitApi.getDiffForFile(repoPath!, filePath!, staged),
     enabled: !!repoPath && !!filePath && !commitHash,
   });
 
@@ -38,6 +100,18 @@ export function DiffView({ filePath, staged, commitHash }: DiffViewProps) {
       : [];
 
   const isLoading = commitHash ? commitDiff.isLoading : fileDiff.isLoading;
+
+  const handleStageLines = useCallback(async (selectedLines: Set<string>) => {
+    if (!repoPath || !filePath || files.length === 0) return;
+    try {
+      const patch = buildPatchFromSelection(files[0], selectedLines);
+      await gitApi.stageLines(repoPath, filePath, patch);
+      queryClient.invalidateQueries({ queryKey: ['git'] });
+      toast.success('Lines staged');
+    } catch (err: any) {
+      toast.error('Stage lines failed', err?.message || 'Failed to apply patch');
+    }
+  }, [repoPath, filePath, files, queryClient]);
 
   if (isLoading) {
     return (
@@ -94,6 +168,38 @@ export function DiffView({ filePath, staged, commitHash }: DiffViewProps) {
             })()}
         </div>
         <div className="flex items-center gap-1">
+          {/* Diff options - only for file diffs, not commit diffs */}
+          {!commitHash && (
+            <>
+              <button
+                onClick={() => setIgnoreWhitespace(!ignoreWhitespace)}
+                className={`p-1.5 rounded transition-colors text-xs flex items-center gap-1 ${
+                  ignoreWhitespace ? 'bg-accent-muted text-accent' : 'text-secondary hover:text-primary hover:bg-hover'
+                }`}
+                title="Ignore whitespace changes"
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Whitespace</span>
+              </button>
+              <div className="flex items-center gap-1 ml-1">
+                <AlignJustify className="w-3.5 h-3.5 text-tertiary" />
+                <select
+                  value={contextLines}
+                  onChange={(e) => setContextLines(Number(e.target.value))}
+                  className="bg-transparent text-xs text-secondary border border-default rounded px-1 py-0.5 focus:outline-none focus:border-accent"
+                  title="Context lines"
+                >
+                  <option value={0}>0 lines</option>
+                  <option value={1}>1 line</option>
+                  <option value={3}>3 lines</option>
+                  <option value={5}>5 lines</option>
+                  <option value={10}>10 lines</option>
+                  <option value={20}>20 lines</option>
+                </select>
+              </div>
+              <div className="w-px h-4 bg-default mx-1" />
+            </>
+          )}
           <button
             onClick={() => setDiffViewMode('unified')}
             className={`p-1.5 rounded transition-colors ${diffViewMode === 'unified' ? 'bg-accent-muted text-accent' : 'text-secondary hover:text-primary hover:bg-hover'}`}
@@ -114,7 +220,13 @@ export function DiffView({ filePath, staged, commitHash }: DiffViewProps) {
       {/* Diff content */}
       <div className="flex-1 overflow-y-auto">
         {files.map((file) => (
-          <DiffFileSection key={file.newPath} file={file} mode={diffViewMode} />
+          <DiffFileSection
+            key={file.newPath}
+            file={file}
+            mode={diffViewMode}
+            enableLineStaging={enableLineStaging && !commitHash}
+            onStageLines={handleStageLines}
+          />
         ))}
       </div>
     </div>
@@ -124,9 +236,13 @@ export function DiffView({ filePath, staged, commitHash }: DiffViewProps) {
 function DiffFileSection({
   file,
   mode,
+  enableLineStaging,
+  onStageLines,
 }: {
   file: DiffFile;
   mode: 'unified' | 'split';
+  enableLineStaging?: boolean;
+  onStageLines?: (selectedLines: Set<string>) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -195,7 +311,11 @@ function DiffFileSection({
                 Binary file or no displayable changes
               </div>
             ) : mode === 'unified' ? (
-              <UnifiedDiff file={file} />
+              <UnifiedDiff
+                file={file}
+                enableLineSelection={enableLineStaging}
+                onStageLines={onStageLines}
+              />
             ) : (
               <SplitDiff file={file} />
             )}

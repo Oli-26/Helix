@@ -280,6 +280,30 @@ export class GitService {
     await this.git.rebase([onto]);
   }
 
+  async abortMerge(): Promise<void> {
+    await this.git.merge(['--abort']);
+  }
+
+  async abortRebase(): Promise<void> {
+    await this.git.rebase(['--abort']);
+  }
+
+  async abortCherryPick(): Promise<void> {
+    await this.git.raw(['cherry-pick', '--abort']);
+  }
+
+  async continueRebase(): Promise<void> {
+    await this.git.rebase(['--continue']);
+  }
+
+  async continueCherryPick(): Promise<void> {
+    await this.git.raw(['cherry-pick', '--continue']);
+  }
+
+  async continueMerge(): Promise<void> {
+    await this.git.commit('');
+  }
+
   async push(
     remote = 'origin',
     branch?: string,
@@ -348,7 +372,7 @@ export class GitService {
         hash,
       ]);
       return parseUnifiedDiff(raw);
-    } catch {
+    } catch (err) {
       // Fallback: try diff-tree for root commits
       try {
         const raw = await this.git.raw([
@@ -358,7 +382,8 @@ export class GitService {
           hash,
         ]);
         return parseUnifiedDiff(raw);
-      } catch {
+      } catch (err2) {
+        console.error('getDiffForCommit failed for', hash, err, err2);
         return [];
       }
     }
@@ -632,6 +657,123 @@ export class GitService {
     const cappedEdges = edges.slice(0, 1500);
 
     return { nodes, edges: cappedEdges };
+  }
+
+  // ─── Remote management ───────────────────────────────────────────
+
+  async addRemote(name: string, url: string): Promise<void> {
+    await this.git.addRemote(name, url);
+  }
+
+  async removeRemote(name: string): Promise<void> {
+    await this.git.removeRemote(name);
+  }
+
+  async renameRemote(oldName: string, newName: string): Promise<void> {
+    await this.git.raw(['remote', 'rename', oldName, newName]);
+  }
+
+  async setRemoteUrl(name: string, url: string): Promise<void> {
+    await this.git.raw(['remote', 'set-url', name, url]);
+  }
+
+  // ─── Diff options ──────────────────────────────────────────────
+
+  async getDiffForFileWithOptions(
+    filePath: string,
+    staged = false,
+    options?: { ignoreWhitespace?: boolean; contextLines?: number },
+  ): Promise<DiffFile> {
+    const args = staged
+      ? ['diff', '--cached']
+      : ['diff'];
+    if (options?.ignoreWhitespace) args.push('-w');
+    if (options?.contextLines !== undefined) args.push(`-U${options.contextLines}`);
+    args.push('--', filePath);
+    const raw = await this.git.raw(args);
+    const files = parseUnifiedDiff(raw);
+    return files[0] || {
+      oldPath: filePath,
+      newPath: filePath,
+      status: 'modified',
+      hunks: [],
+    };
+  }
+
+  // ─── Stash show ────────────────────────────────────────────────
+
+  async getStashDiff(index: number): Promise<DiffFile[]> {
+    try {
+      const raw = await this.git.raw([
+        'stash', 'show', '-p', `stash@{${index}}`,
+      ]);
+      return parseUnifiedDiff(raw);
+    } catch (err) {
+      console.error('getStashDiff failed for index', index, err);
+      return [];
+    }
+  }
+
+  // ─── Log filtering ────────────────────────────────────────────
+
+  async getFilteredLog(options: {
+    maxCount?: number;
+    branch?: string;
+    author?: string;
+    since?: string;
+    until?: string;
+    searchText?: string;
+  }): Promise<CommitNode[]> {
+    const args = [
+      'log',
+      options.branch || '--all',
+      '--topo-order',
+      `--format=%H|%h|%P|%D|%an|%ae|%at|%s`,
+      `-n${options.maxCount || 5000}`,
+    ];
+    if (options.author) args.push(`--author=${options.author}`);
+    if (options.since) args.push(`--since=${options.since}`);
+    if (options.until) args.push(`--until=${options.until}`);
+    if (options.searchText) args.push(`--grep=${options.searchText}`);
+
+    const result = await this.git.raw(args);
+    const lines = result.trim().split('\n').filter(Boolean);
+
+    return lines.map((line) => {
+      const [hash, abbreviatedHash, parentStr, refsStr, authorName, authorEmail, authorDateStr, ...subjectParts] =
+        line.split('|');
+      return {
+        hash,
+        abbreviatedHash,
+        parents: parentStr ? parentStr.split(' ').filter(Boolean) : [],
+        refs: refsStr ? refsStr.split(', ').filter(Boolean) : [],
+        authorName,
+        authorEmail,
+        authorDate: parseInt(authorDateStr, 10),
+        subject: subjectParts.join('|'),
+      };
+    });
+  }
+
+  // ─── Line-level staging ────────────────────────────────────────
+
+  async stageLines(filePath: string, patch: string): Promise<void> {
+    // Apply a partial patch to the index
+    const { execSync } = await import('node:child_process');
+    execSync('git apply --cached --unidiff-zero -', {
+      input: patch,
+      cwd: this.repoPath,
+      encoding: 'utf-8',
+    });
+  }
+
+  async unstageLines(filePath: string, patch: string): Promise<void> {
+    const { execSync } = await import('node:child_process');
+    execSync('git apply --cached --reverse --unidiff-zero -', {
+      input: patch,
+      cwd: this.repoPath,
+      encoding: 'utf-8',
+    });
   }
 
   async searchCommits(query: string): Promise<CommitNode[]> {
